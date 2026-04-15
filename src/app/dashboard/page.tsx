@@ -119,3 +119,4 @@ function MetricCard({ title, value, trend, icon, isHighlight = false }: { title:
     </div>
   );
 }
+
