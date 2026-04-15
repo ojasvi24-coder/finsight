@@ -1,14 +1,20 @@
 "use client";
 
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { monthlyTrends } from '@/lib/mock-data';
 
 export function TrendChart() {
   return (
-    <div className="h-[300px] w-full">
+    <div className="h-[350px] w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={monthlyTrends} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+        <AreaChart data={monthlyTrends} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+          <defs>
+            <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+              <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" opacity={0.5} />
           <XAxis 
             dataKey="month" 
             axisLine={false} 
@@ -23,18 +29,26 @@ export function TrendChart() {
             tickFormatter={(value) => `$${value / 1000}k`}
           />
           <Tooltip 
-            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-            formatter={(value: any) => [`$${value.toLocaleString()}`, 'Amount']}
+            contentStyle={{ 
+              backgroundColor: 'rgba(15, 23, 42, 0.9)', 
+              backdropFilter: 'blur(8px)',
+              borderColor: '#1e293b',
+              borderRadius: '12px',
+              color: '#f8fafc'
+            }}
+            itemStyle={{ color: '#10b981' }}
+            formatter={(value: any) => [`$${value.toLocaleString()}`, 'Net Worth']}
           />
-          <Line 
+          <Area 
             type="monotone" 
             dataKey="balance" 
-            stroke="#0f172a" 
-            strokeWidth={3} 
-            dot={{ r: 4, fill: '#0f172a', strokeWidth: 2, stroke: '#fff' }} 
-            activeDot={{ r: 6 }} 
+            stroke="#10b981" 
+            strokeWidth={3}
+            fillOpacity={1} 
+            fill="url(#colorBalance)"
+            activeDot={{ r: 6, fill: '#10b981', stroke: '#020617', strokeWidth: 4 }}
           />
-        </LineChart>
+        </AreaChart>
       </ResponsiveContainer>
     </div>
   );

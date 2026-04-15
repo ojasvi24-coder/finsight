@@ -7,27 +7,27 @@ export const monthlyTrends = [
   { month: "Jun", balance: 52400, spending: 3000 },
 ];
 
-export const spendingCategories = [
-  { name: "Housing", value: 2000, fill: "#0f172a" },
-  { name: "Food", value: 800, fill: "#334155" },
-  { name: "Transport", value: 400, fill: "#64748b" },
-  { name: "Entertainment", value: 300, fill: "#94a3b8" },
-];
-
 export const aiInsights = [
   {
     id: 1,
     type: "warning",
-    message: "Your dining out expenses increased by 18% this month. Consider cooking at home to stay on budget.",
+    message: "Dining expenses rose 18%. Consider meal prepping to stay within your $400/mo target.",
   },
   {
     id: 2,
     type: "success",
-    message: "Great job! You saved 24% of your income this month, exceeding the recommended 20% rule.",
+    message: "You saved 24% of your income this month. You are on track for your Q3 investment goals.",
   },
   {
     id: 3,
     type: "info",
-    message: "Top spending category: Housing (45%). This is within the normal threshold for your city.",
+    message: "Top category: Housing (45%). This is optimal for the Bay Area market.",
   }
+];
+
+export const recentTransactions = [
+  { id: "tx-1", name: "Apple Store", category: "Electronics", amount: -1299.00, date: "Today", status: "Completed" },
+  { id: "tx-2", name: "Stripe Payout", category: "Income", amount: 4250.00, date: "Yesterday", status: "Completed" },
+  { id: "tx-3", name: "Whole Foods", category: "Groceries", amount: -142.50, date: "Jun 12", status: "Pending" },
+  { id: "tx-4", name: "Equinox Fitness", category: "Health", amount: -250.00, date: "Jun 10", status: "Completed" },
 ];
