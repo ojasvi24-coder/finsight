@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, Shield, Zap, Activity, BarChart3 } from "lucide-react";
 import { TrendChart } from "@/components/charts/TrendChart";
+import { monthlyTrends } from "@/lib/mock-data"; 
 
 export default function Home() {
   return (
@@ -77,7 +78,7 @@ export default function Home() {
                 <span className="text-2xl font-bold text-emerald-400">+$4,200.00</span>
               </div>
               {/* We are reusing the exact same chart from your dashboard! */}
-              <TrendChart />
+              <TrendChart data={monthlyTrends} />
             </div>
           </div>
         </div>

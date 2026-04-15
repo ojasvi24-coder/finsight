@@ -1,13 +1,17 @@
 "use client";
 
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { monthlyTrends } from '@/lib/mock-data';
 
-export function TrendChart() {
+// Add the interface for the props
+interface TrendChartProps {
+  data: { month: string; balance: number }[];
+}
+
+export function TrendChart({ data }: TrendChartProps) {
   return (
     <div className="h-[350px] w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={monthlyTrends} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+        <AreaChart data={data} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
           <defs>
             <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
@@ -37,7 +41,7 @@ export function TrendChart() {
               color: '#f8fafc'
             }}
             itemStyle={{ color: '#10b981' }}
-            formatter={(value: any) => [`$${value.toLocaleString()}`, 'Net Worth']}
+            formatter={(value: any) => [`$${value.toLocaleString()}`, 'Projected Net Worth']}
           />
           <Area 
             type="monotone" 
