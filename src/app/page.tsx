@@ -49,7 +49,7 @@ export default function LearnPage() {
         >
           <Link href="/" className="text-xl font-bold tracking-tighter text-white flex items-center gap-2 hover:opacity-80 transition-opacity">
             <Activity className="h-6 w-6 text-emerald-500" />
-            FinSight<span className="text-emerald-500">.ai</span>
+            FinSight<span className="text-emerald-500"></span>
           </Link>
           <Link href="/dashboard" className="text-sm font-semibold text-slate-300 hover:text-emerald-400 flex items-center gap-2 transition-colors">
             Launch Engine <ArrowLeft className="h-4 w-4 rotate-180" />
