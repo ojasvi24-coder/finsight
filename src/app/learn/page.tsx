@@ -5,18 +5,12 @@ import { Activity, BookOpen, TrendingUp, PiggyBank, ArrowRight, Sparkles, Zap } 
 import { motion, Variants } from "framer-motion";
 import { useState, useEffect } from "react";
 
-interface CompoundDataPoint {
-  year: number;
-  principal: number;
-  interest: number;
-  totalBalance: number;
-}
-
 export default function LearnPage() {
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
   const [isClient, setIsClient] = useState(false);
   const [particles, setParticles] = useState<Array<{ id: number; x: number; y: number }>>([]);
 
+  // Articles with proper links
   const articles = [
     {
       slug: "asset-allocation",
@@ -94,6 +88,12 @@ export default function LearnPage() {
       y: Math.random() * 100,
     }));
     setParticles(generatedParticles);
+
+    const handleMouseMove = (e: MouseEvent) => {
+      // Could track mouse for effects
+    };
+    window.addEventListener("mousemove", handleMouseMove);
+    return () => window.removeEventListener("mousemove", handleMouseMove);
   }, []);
 
   const containerVariants: Variants = {
@@ -121,8 +121,9 @@ export default function LearnPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50 overflow-hidden selection:bg-cyan-500/30" style={{ fontFamily: "'Times New Roman', Times, serif" }}>
+    <div className="min-h-screen bg-slate-950 text-slate-50 overflow-hidden selection:bg-cyan-500/30">
       
+      {/* Animated background elements */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <motion.div 
           className="absolute -top-1/4 -right-1/4 w-96 h-96 bg-gradient-to-br from-cyan-500/20 to-purple-500/10 rounded-full blur-[120px]"
@@ -172,32 +173,45 @@ export default function LearnPage() {
 
       <div className="relative mx-auto max-w-7xl px-6 sm:px-8 py-8 sm:py-12 z-10">
         
+        {/* Navigation */}
         <motion.nav 
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
           className="mb-20 flex items-center justify-between border-b border-slate-800/50 pb-6 backdrop-blur-md"
         >
-          <Link href="/" className="group text-2xl font-bold tracking-tighter text-white flex items-center gap-2 hover:opacity-80 transition-opacity" style={{ fontFamily: "'Times New Roman', Times, serif" }}>
+          <Link href="/" className="group text-2xl font-black tracking-tighter text-white flex items-center gap-2 hover:opacity-80 transition-opacity">
             <motion.div
               animate={{ rotate: 360 }}
               transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
             >
               <Activity className="h-7 w-7 text-cyan-400" />
             </motion.div>
-            FinSight<span className="text-cyan-400 ml-1">→</span>
+            FinSight<span className="text-cyan-400 ml-1">Ultra</span>
           </Link>
-          <Link href="/dashboard" className="group text-sm font-bold text-slate-300 hover:text-cyan-400 flex items-center gap-2 transition-all duration-300 px-4 py-2 rounded-lg hover:bg-cyan-500/10">
-            Dashboard 
-            <motion.div
-              animate={{ x: [0, 5, 0] }}
-              transition={{ duration: 1.5, repeat: Infinity }}
-            >
-              <ArrowRight className="h-4 w-4" />
-            </motion.div>
-          </Link>
+          <div className="flex gap-4">
+            <Link href="/dashboard" className="group text-sm font-bold text-slate-300 hover:text-cyan-400 flex items-center gap-2 transition-all duration-300 px-4 py-2 rounded-lg hover:bg-cyan-500/10">
+              Dashboard 
+              <motion.div
+                animate={{ x: [0, 5, 0] }}
+                transition={{ duration: 1.5, repeat: Infinity }}
+              >
+                <ArrowRight className="h-4 w-4" />
+              </motion.div>
+            </Link>
+            <Link href="/dashboard" className="group text-sm font-bold text-slate-300 hover:text-emerald-400 flex items-center gap-2 transition-all duration-300 px-4 py-2 rounded-lg hover:bg-emerald-500/10">
+              Simulator
+              <motion.div
+                animate={{ x: [0, 5, 0] }}
+                transition={{ duration: 1.5, repeat: Infinity }}
+              >
+                <Zap className="h-4 w-4" />
+              </motion.div>
+            </Link>
+          </div>
         </motion.nav>
 
+        {/* Header */}
         <motion.header 
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
@@ -218,11 +232,10 @@ export default function LearnPage() {
           </motion.div>
           
           <motion.h1 
-            className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-white mb-8 leading-tight"
+            className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tight text-white mb-8 leading-tight"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.8, delay: 0.2 }}
-            style={{ fontFamily: "'Times New Roman', Times, serif" }}
           >
             <motion.span
               className="bg-gradient-to-r from-cyan-400 via-emerald-400 to-pink-400 bg-clip-text text-transparent"
@@ -238,9 +251,8 @@ export default function LearnPage() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.3 }}
-            style={{ fontFamily: "'Times New Roman', Times, serif" }}
           >
-            Master the mathematics of wealth creation. Explore developer-curated guides on asset allocation, market dynamics, and algorithmic investing strategies.
+            Master the mathematics of wealth creation with live simulations, interactive demos, and comprehensive guides on asset allocation, market dynamics, and algorithmic investing strategies.
           </motion.p>
 
           <motion.div 
@@ -259,13 +271,14 @@ export default function LearnPage() {
                 className="flex flex-col"
                 whileHover={{ scale: 1.1 }}
               >
-                <span className="text-3xl sm:text-4xl font-bold text-cyan-400" style={{ fontFamily: "'Times New Roman', Times, serif" }}>{stat.number}</span>
+                <span className="text-3xl sm:text-4xl font-black text-cyan-400">{stat.number}</span>
                 <span className="text-sm text-slate-500 font-semibold uppercase tracking-wider">{stat.label}</span>
               </motion.div>
             ))}
           </motion.div>
         </motion.header>
 
+        {/* Articles Grid */}
         <motion.div 
           variants={containerVariants}
           initial="hidden"
@@ -316,15 +329,14 @@ export default function LearnPage() {
                         </div>
 
                         <motion.h2 
-                          className="text-xl sm:text-2xl font-bold text-white mb-4 leading-tight"
-                          style={{ fontFamily: "'Times New Roman', Times, serif" }}
+                          className="text-xl sm:text-2xl font-black text-white mb-4 leading-tight"
                           animate={hoveredCard === article.slug ? { color: "#06b6d4" } : { color: "#ffffff" }}
                           transition={{ duration: 0.3 }}
                         >
                           {article.title}
                         </motion.h2>
 
-                        <p className="text-sm text-slate-400 leading-relaxed font-medium" style={{ fontFamily: "'Times New Roman', Times, serif" }}>
+                        <p className="text-sm text-slate-400 leading-relaxed font-medium">
                           {article.description}
                         </p>
                       </div>
@@ -336,7 +348,7 @@ export default function LearnPage() {
                         transition={{ duration: 0.3 }}
                       >
                         <div className="flex items-center gap-2 text-cyan-400 font-bold text-sm">
-                          Explore
+                          Read Article
                           <motion.div
                             animate={{ x: [0, 5, 0] }}
                             transition={{ duration: 1, repeat: Infinity }}
@@ -376,6 +388,7 @@ export default function LearnPage() {
           })}
         </motion.div>
 
+        {/* CTA Section - Start Learning with Live Simulation */}
         <motion.div
           initial={{ opacity: 0, y: 40 }}
           animate={{ opacity: 1, y: 0 }}
@@ -390,11 +403,10 @@ export default function LearnPage() {
           
           <div className="relative z-10">
             <motion.h3 
-              className="text-3xl sm:text-4xl font-bold text-white mb-4"
+              className="text-3xl sm:text-4xl font-black text-white mb-4"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.9 }}
-              style={{ fontFamily: "'Times New Roman', Times, serif" }}
             >
               Ready to Master Your Finances?
             </motion.h3>
@@ -403,25 +415,36 @@ export default function LearnPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 1 }}
-              style={{ fontFamily: "'Times New Roman', Times, serif" }}
             >
-              Start with our comprehensive guides and transform your financial future today.
+              Experience live market simulations, interactive calculators, and real-time financial tools in our comprehensive dashboard.
             </motion.p>
-            <Link href="/dashboard">
-              <motion.button
-                whileHover={{ scale: 1.05, boxShadow: "0 20px 40px rgba(6, 182, 212, 0.4)" }}
-                whileTap={{ scale: 0.95 }}
-                className="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 text-white font-bold text-lg hover:shadow-lg transition-shadow"
-              >
-                Start Learning
-                <motion.div
-                  animate={{ x: [0, 5, 0] }}
-                  transition={{ duration: 1.5, repeat: Infinity }}
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link href="/dashboard">
+                <motion.button
+                  whileHover={{ scale: 1.05, boxShadow: "0 20px 40px rgba(6, 182, 212, 0.4)" }}
+                  whileTap={{ scale: 0.95 }}
+                  className="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 text-white font-bold text-lg hover:shadow-lg transition-shadow"
                 >
-                  <ArrowRight className="h-5 w-5" />
-                </motion.div>
-              </motion.button>
-            </Link>
+                  Launch Dashboard
+                  <motion.div
+                    animate={{ x: [0, 5, 0] }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                  >
+                    <ArrowRight className="h-5 w-5" />
+                  </motion.div>
+                </motion.button>
+              </Link>
+              <Link href="/dashboard">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="inline-flex items-center gap-2 px-8 py-4 rounded-xl border border-cyan-500 text-cyan-400 font-bold text-lg hover:bg-cyan-500/10 transition-all"
+                >
+                  View Live Simulator
+                  <Zap className="h-5 w-5" />
+                </motion.button>
+              </Link>
+            </div>
           </div>
         </motion.div>
       </div>
