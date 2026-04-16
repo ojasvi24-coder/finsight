@@ -145,7 +145,7 @@ export default function Home() {
       {/* FOOTER */}
       <section className="border-t border-white/5 py-16 text-center">
         <p className="text-gray-500 text-sm">
-          Built with Next.js, Tailwind, and modern data visualization tools
+          Built with Next.js, Tailwind, and modern data visualization tools!
         </p>
       </section>
 
