@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { Activity, BookOpen, TrendingUp, PiggyBank, ArrowRight, Sparkles, ChevronRight, Zap } from "lucide-react";
-import { motion, Variants, useViewportScroll, useTransform, useMotionValue, useSpring } from "framer-motion";
+import { Activity, BookOpen, TrendingUp, PiggyBank, ArrowRight, Sparkles, Zap } from "lucide-react";
+import { motion, Variants } from "framer-motion";
 import { useState, useEffect } from "react";
 
 export default function LearnPage() {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
+  const [isClient, setIsClient] = useState(false);
+  const [particles, setParticles] = useState<Array<{ id: number; x: number; y: number }>>([]);
 
   // Dynamic articles with images
   const articles = [
@@ -79,6 +81,27 @@ export default function LearnPage() {
     }
   ];
 
+  // Initialize client-side only
+  useEffect(() => {
+    setIsClient(true);
+
+    // Generate particles
+    const generatedParticles = [...Array(20)].map((_, i) => ({
+      id: i,
+      x: Math.random() * 100,
+      y: Math.random() * 100,
+    }));
+    setParticles(generatedParticles);
+
+    // Mouse tracking
+    const handleMouseMove = (e: MouseEvent) => {
+      setMousePosition({ x: e.clientX, y: e.clientY });
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    return () => window.removeEventListener("mousemove", handleMouseMove);
+  }, []);
+
   // Variants for staggered animations
   const containerVariants: Variants = {
     hidden: { opacity: 0 },
@@ -103,26 +126,6 @@ export default function LearnPage() {
       },
     },
   };
-
-  const floatingVariants = {
-    float: {
-      y: [0, -20, 0],
-      transition: {
-        duration: 3,
-        repeat: Infinity,
-        ease: "easeInOut",
-      },
-    },
-  };
-
-  // Mouse tracking for interactive effects
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      setMousePosition({ x: e.clientX, y: e.clientY });
-    };
-    window.addEventListener("mousemove", handleMouseMove);
-    return () => window.removeEventListener("mousemove", handleMouseMove);
-  }, []);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 overflow-hidden selection:bg-cyan-500/30">
@@ -155,14 +158,14 @@ export default function LearnPage() {
           transition={{ duration: 12, repeat: Infinity, delay: 2 }}
         />
 
-        {/* Floating particles */}
-        {[...Array(20)].map((_, i) => (
+        {/* Floating particles - only render on client */}
+        {isClient && particles.map((particle) => (
           <motion.div
-            key={i}
+            key={particle.id}
             className="absolute w-1 h-1 bg-cyan-400/40 rounded-full"
-            initial={{
-              x: Math.random() * window.innerWidth,
-              y: Math.random() * window.innerHeight,
+            style={{
+              left: `${particle.x}%`,
+              top: `${particle.y}%`,
             }}
             animate={{
               y: [0, -100, 0],
@@ -443,3 +446,4 @@ export default function LearnPage() {
     </div>
   );
 }
+
