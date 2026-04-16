@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useState, useEffect, useMemo } from "react";
-import { 
-  ArrowRight, Activity, Zap, TrendingUp, Shield, Sparkles, 
-  BrainCircuit, Globe, BarChart3, Lock, TrendingDown, ExternalLink 
+import {
+  ArrowRight, Activity, Sparkles,
+  Lock, ExternalLink
 } from "lucide-react";
-import { motion, Variants } from "framer-motion";
+import { motion } from "framer-motion";
 import { TrendChart } from "@/components/charts/TrendChart";
 
 export default function Home() {
@@ -14,142 +14,214 @@ export default function Home() {
   const [demoGoal, setDemoGoal] = useState<number>(500);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
-  // Mouse Tracker for Dynamic Glow Effect
+  // smoother glow (less aggressive)
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      setMousePosition({ x: e.clientX, y: e.clientY });
+      setMousePosition({
+        x: e.clientX,
+        y: e.clientY
+      });
     };
     window.addEventListener("mousemove", handleMouseMove);
     return () => window.removeEventListener("mousemove", handleMouseMove);
   }, []);
 
-  // Live Market API Sync
   useEffect(() => {
     const fetchLiveMarket = async () => {
       try {
-        const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd&include_24hr_change=true');
+        const res = await fetch(
+          "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd&include_24hr_change=true"
+        );
         const data = await res.json();
         setMarketData([
           { id: "bitcoin", symbol: "BTC", price: data.bitcoin.usd, change: data.bitcoin.usd_24h_change },
           { id: "ethereum", symbol: "ETH", price: data.ethereum.usd, change: data.ethereum.usd_24h_change },
           { id: "solana", symbol: "SOL", price: data.solana.usd, change: data.solana.usd_24h_change },
         ]);
-      } catch (error) {
+      } catch {
         setMarketData([
-          { id: "bitcoin", symbol: "BTC", price: 74813.00, change: 0.32 },
-          { id: "ethereum", symbol: "ETH", price: 2359.88, change: 1.12 },
-          { id: "solana", symbol: "SOL", price: 84.97, change: -1.49 },
+          { id: "bitcoin", symbol: "BTC", price: 74813, change: 0.32 },
+          { id: "ethereum", symbol: "ETH", price: 2359, change: 1.12 },
+          { id: "solana", symbol: "SOL", price: 84, change: -1.49 },
         ]);
       }
     };
     fetchLiveMarket();
   }, []);
 
-  // Interactive Demo Logic
   const demoProjectionData = useMemo(() => {
-    let baseBalance = 25000;
-    let optBalance = 25000;
-    const monthlySavings = 1200;
-    return ["Now", "M1", "M2", "M3", "M4", "M5", "M6"].map((month) => {
-      const dataPoint = { month, balance: baseBalance, optimized: optBalance };
-      baseBalance += monthlySavings;
-      optBalance += (monthlySavings + demoGoal);
-      return dataPoint;
+    let base = 25000;
+    let opt = 25000;
+    const save = 1200;
+
+    return ["Now", "M1", "M2", "M3", "M4", "M5", "M6"].map((m) => {
+      const point = { month: m, balance: base, optimized: opt };
+      base += save;
+      opt += save + demoGoal;
+      return point;
     });
   }, [demoGoal]);
 
-  const fadeUp: Variants = {
-    hidden: { opacity: 0, y: 30 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.8 } }
-  };
-
   return (
-    <div className="min-h-screen bg-[#030712] text-slate-50 font-sans overflow-x-hidden relative">
-      <motion.div 
-        className="pointer-events-none fixed top-0 left-0 w-[500px] h-[500px] bg-emerald-500/10 rounded-full blur-[100px] z-0"
-        animate={{ x: mousePosition.x - 250, y: mousePosition.y - 250 }}
-        transition={{ type: "tween", ease: "backOut", duration: 0.5 }}
+    <div className="min-h-screen bg-[#020617] text-white relative overflow-hidden">
+
+      {/* ✨ subtle gradient glow */}
+      <motion.div
+        className="pointer-events-none fixed w-[600px] h-[600px] rounded-full blur-[120px] opacity-30"
+        animate={{
+          x: mousePosition.x - 300,
+          y: mousePosition.y - 300
+        }}
+        transition={{ type: "spring", stiffness: 40 }}
+        style={{ background: "radial-gradient(circle, #10b981, transparent 70%)" }}
       />
 
-      <nav className="fixed top-0 inset-x-0 z-50 bg-[#030712]/80 backdrop-blur-xl border-b border-white/5">
-        <div className="flex items-center justify-between px-6 py-4 max-w-7xl mx-auto">
-          <Link href="/" className="text-xl font-bold tracking-tighter flex items-center gap-2">
-            <Activity className="h-6 w-6 text-emerald-500" /> FinSight.ai
-          </Link>
+      {/* NAV */}
+      <nav className="fixed top-0 w-full z-50 backdrop-blur-xl bg-black/40 border-b border-white/5">
+        <div className="max-w-7xl mx-auto flex justify-between items-center px-6 py-4">
+          <div className="flex items-center gap-2 font-bold text-lg">
+            <Activity className="text-emerald-400" />
+            FinSight
+          </div>
+
           <div className="flex gap-6 items-center">
-            <Link href="/learn" className="text-sm font-semibold text-slate-400 hover:text-white">Learn</Link>
-            <Link href="/dashboard" className="rounded-full bg-white text-slate-950 px-5 py-2 text-sm font-bold hover:scale-105 transition-all">Launch Engine</Link>
+            <Link href="/learn" className="text-sm text-gray-400 hover:text-white transition">
+              Learn
+            </Link>
+
+            <Link
+              href="/dashboard"
+              className="bg-emerald-500 text-black px-5 py-2 rounded-full font-semibold hover:scale-105 transition"
+            >
+              Launch
+            </Link>
           </div>
         </div>
       </nav>
 
-      <main className="relative mx-auto max-w-7xl px-6 pt-32 pb-20 z-10">
-        <motion.section initial="hidden" animate="visible" className="text-center mb-32">
-          <motion.div variants={fadeUp} className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 mb-8">
-            <Sparkles className="h-4 w-4 text-emerald-400" />
-            <span className="text-sm font-bold text-emerald-300 tracking-wide uppercase">Neural Engine v2.0 Live</span>
-          </motion.div>
-          <motion.h1 variants={fadeUp} className="text-6xl sm:text-8xl font-black tracking-tighter mb-8 leading-[0.9]">
-            Wealth. <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-500">Automated.</span>
-          </motion.h1>
-          <motion.p variants={fadeUp} className="text-xl text-slate-400 max-w-2xl mx-auto mb-12">
-            The first autonomous financial simulator. Model your future, detect leaks, and optimize your trajectory in real-time.
-          </motion.p>
-          <motion.div variants={fadeUp}>
-            <Link href="/dashboard" className="inline-flex items-center gap-3 px-8 py-4 rounded-full bg-emerald-500 text-slate-950 font-black text-lg shadow-[0_0_40px_-10px_rgba(16,185,129,0.5)] hover:scale-105 transition-all">
-              Deploy Simulator <ArrowRight className="h-5 w-5" />
-            </Link>
-          </motion.div>
-        </motion.section>
+      <main className="pt-32 px-6 max-w-7xl mx-auto">
 
-        {/* INTERACTIVE LIVE PREVIEW */}
-        <motion.div initial={{ opacity: 0, y: 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="mb-40 grid lg:grid-cols-12 gap-8 items-center bg-slate-900/40 p-8 rounded-[2.5rem] border border-white/5 backdrop-blur-3xl shadow-2xl">
-          <div className="lg:col-span-4 space-y-8">
-            <div className="p-6 rounded-3xl bg-slate-950/80 border border-white/5">
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">Live Optimization</span>
-                <span className="text-emerald-400 font-black text-xl">+${demoGoal}/mo</span>
-              </div>
-              <input 
-                type="range" min="0" max="2000" step="50" 
-                value={demoGoal} onChange={(e) => setDemoGoal(Number(e.target.value))}
-                className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500 mb-6"
+        {/* HERO */}
+        <section className="text-center mb-32">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full mb-6"
+          >
+            <Sparkles className="w-4 h-4 text-emerald-400" />
+            <span className="text-sm text-emerald-300">AI Finance Engine</span>
+          </motion.div>
+
+          <motion.h1
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-6xl md:text-7xl font-bold leading-tight"
+          >
+            See where your money{" "}
+            <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
+              actually goes
+            </span>
+          </motion.h1>
+
+          <p className="mt-6 text-gray-400 max-w-xl mx-auto text-lg">
+            Interactive financial insights, projections, and real-time market data — all in one place.
+          </p>
+
+          <div className="mt-8 flex justify-center gap-4">
+            <Link
+              href="/dashboard"
+              className="bg-emerald-500 text-black px-6 py-3 rounded-xl font-semibold hover:scale-105 transition flex items-center gap-2"
+            >
+              View Dashboard <ArrowRight size={18} />
+            </Link>
+
+            <button className="border border-white/10 px-6 py-3 rounded-xl hover:bg-white/5 transition">
+              Explore Features
+            </button>
+          </div>
+        </section>
+
+        {/* INTERACTIVE PANEL */}
+        <section className="grid lg:grid-cols-12 gap-8 mb-32">
+
+          {/* LEFT */}
+          <div className="lg:col-span-4 space-y-6">
+
+            {/* slider */}
+            <motion.div
+              whileHover={{ scale: 1.02 }}
+              className="p-6 bg-white/5 border border-white/10 rounded-2xl"
+            >
+              <p className="text-sm text-gray-400 mb-3">Optimization</p>
+              <p className="text-2xl font-bold text-emerald-400 mb-4">
+                +${demoGoal}/mo
+              </p>
+
+              <input
+                type="range"
+                min="0"
+                max="2000"
+                value={demoGoal}
+                onChange={(e) => setDemoGoal(Number(e.target.value))}
+                className="w-full accent-emerald-500"
               />
-              <p className="text-sm text-slate-400 leading-relaxed italic">"Drag to see how much faster you hit your milestones."</p>
-            </div>
-            
+            </motion.div>
+
+            {/* market cards */}
             <div className="grid grid-cols-2 gap-4">
               {marketData.map((asset) => (
-                <a key={asset.id} href={`https://coinmarketcap.com/currencies/${asset.id}/`} target="_blank" className="p-4 rounded-2xl bg-slate-950/50 border border-white/5 hover:border-emerald-500/30 transition-all group">
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="font-bold text-xs text-slate-500">{asset.symbol}</span>
-                    <ExternalLink className="h-3 w-3 text-slate-700 group-hover:text-emerald-500" />
+                <motion.a
+                  whileHover={{ y: -4 }}
+                  key={asset.id}
+                  href="#"
+                  className="p-4 rounded-xl bg-white/5 border border-white/10"
+                >
+                  <div className="flex justify-between text-xs text-gray-400">
+                    {asset.symbol}
+                    <ExternalLink size={12} />
                   </div>
-                  <p className="font-bold text-white mb-1">${asset.price.toLocaleString()}</p>
-                  <p className={`text-[10px] font-bold ${asset.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{asset.change >= 0 ? '+' : ''}{asset.change.toFixed(2)}%</p>
-                </a>
+
+                  <p className="mt-2 font-bold text-lg">
+                    ${asset.price.toLocaleString()}
+                  </p>
+
+                  <p className={`text-xs ${asset.change >= 0 ? "text-green-400" : "text-red-400"}`}>
+                    {asset.change.toFixed(2)}%
+                  </p>
+                </motion.a>
               ))}
             </div>
           </div>
 
-          <div className="lg:col-span-8 bg-[#0a0f1c] p-8 rounded-[2rem] border border-white/10 h-[450px] relative shadow-inner">
-             <div className="absolute top-6 left-8 flex items-center gap-2 text-xs font-bold text-emerald-500/50 uppercase tracking-[0.2em]"><Activity className="h-4 w-4" /> Live Engine Output</div>
-             <TrendChart data={demoProjectionData} />
-          </div>
-        </motion.div>
+          {/* RIGHT CHART */}
+          <motion.div
+            initial={{ opacity: 0, y: 40 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            className="lg:col-span-8 bg-white/5 border border-white/10 rounded-2xl p-6"
+          >
+            <p className="text-sm text-emerald-400 mb-4">Projection Engine</p>
+            <TrendChart data={demoProjectionData} />
+          </motion.div>
+        </section>
 
-        {/* BENTO GRID IMAGES */}
-        <section className="grid md:grid-cols-3 gap-6 auto-rows-[300px] mb-32">
-          <div className="md:col-span-2 rounded-[2rem] overflow-hidden relative border border-white/10 group">
-            <img src="https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&q=80&w=1200" className="object-cover w-full h-full opacity-50 group-hover:scale-105 transition-all duration-700" />
-            <div className="absolute bottom-8 left-8"><h3 className="text-3xl font-black text-white mb-2">Institutional-Grade</h3><p className="text-slate-400">Analysis tools usually reserved for the top 1%.</p></div>
+        {/* FEATURE BLOCK */}
+        <section className="grid md:grid-cols-2 gap-6 mb-32">
+          <div className="p-8 rounded-2xl bg-gradient-to-br from-white/5 to-transparent border border-white/10">
+            <h3 className="text-2xl font-semibold mb-2">Institutional-grade insights</h3>
+            <p className="text-gray-400">
+              Data visualization and forecasting tools inspired by real fintech platforms.
+            </p>
           </div>
-          <div className="bg-gradient-to-br from-slate-900 to-slate-950 rounded-[2rem] p-8 border border-white/10 flex flex-col justify-center">
-            <Lock className="h-10 w-10 text-cyan-400 mb-6" />
-            <h3 className="text-xl font-bold mb-2">AES-256 Secured</h3>
-            <p className="text-sm text-slate-500">Read-only access. We never store or sell your personal credentials.</p>
+
+          <div className="p-8 rounded-2xl bg-white/5 border border-white/10">
+            <Lock className="mb-4 text-cyan-400" />
+            <h3 className="text-xl font-semibold mb-2">Secure by design</h3>
+            <p className="text-gray-400">
+              No personal data stored. Everything runs client-side for safety.
+            </p>
           </div>
         </section>
+
       </main>
     </div>
   );
