@@ -1,5 +1,7 @@
 "use client";
 
+import { AIInsights } from '@/components/AiInsights'; 
+import { aiInsights } from '@/lib/mock-data';
 import Link from "next/link";
 import { Activity, BookOpen, TrendingUp, PiggyBank, ArrowRight, Sparkles, Zap } from "lucide-react";
 import { motion, Variants } from "framer-motion";
