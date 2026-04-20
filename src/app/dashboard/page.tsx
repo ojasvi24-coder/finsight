@@ -233,10 +233,21 @@ export default function MergedFinancialDashboard() {
     [initialInvestment, netCashFlow]
   );
 
-  const avgMonthlySpending = useMemo(() => {
+  // Calculate monthly averages based on actual transactions
+  const avgMonthlyIncome = useMemo(() => {
     if (incomeTransactions.length === 0) return 0;
-    return totalExpenses / incomeTransactions.length;
-  }, [totalExpenses, incomeTransactions]);
+    return totalIncome / incomeTransactions.length;
+  }, [totalIncome, incomeTransactions]);
+
+  const avgMonthlySpending = useMemo(() => {
+    if (expenseTransactions.length === 0) return 0;
+    return totalExpenses / expenseTransactions.length;
+  }, [totalExpenses, expenseTransactions]);
+
+  const spendingPercentOfIncome = useMemo(() => {
+    if (totalIncome === 0) return 0;
+    return (totalExpenses / totalIncome) * 100;
+  }, [totalExpenses, totalIncome]);
 
   const savingsRate = useMemo(() => {
     if (totalIncome === 0) return 0;
@@ -307,29 +318,62 @@ export default function MergedFinancialDashboard() {
   const insights = useMemo(() => {
     const list = [];
 
+    // Spending Alert
+    if (totalIncome === 0) {
+      list.push({
+        title: "No Income Recorded",
+        type: "warning",
+        msg: "Add income transactions to track your financial health.",
+        val: "Action",
+      });
+    } else if (spendingPercentOfIncome > 80) {
+      list.push({
+        title: "High Spending Alert",
+        type: "warning",
+        msg: `You're spending ${Math.round(spendingPercentOfIncome)}% of income. Aim for under 70%.`,
+        val: `${Math.round(spendingPercentOfIncome)}%`,
+      });
+    } else if (spendingPercentOfIncome > 60) {
+      list.push({
+        title: "Spending Alert",
+        type: "warning",
+        msg: `Consider reducing spending to increase savings rate.`,
+        val: `${Math.round(spendingPercentOfIncome)}%`,
+      });
+    } else {
+      list.push({
+        title: "Healthy Spending",
+        type: "success",
+        msg: `You're maintaining a good spending balance.`,
+        val: `${Math.round(spendingPercentOfIncome)}%`,
+      });
+    }
+
+    // Savings Rate
     if (savingsRate >= 20) {
       list.push({
         title: "Healthy Savings Rate",
         type: "success",
-        msg: "You're hitting the 20% golden rule.",
+        msg: "You're hitting the 20% golden rule. Keep it up!",
         val: `${savingsRate.toFixed(1)}%`,
       });
     } else if (savingsRate > 0) {
       list.push({
-        title: "Savings Alert",
+        title: "Savings Progress",
         type: "warning",
-        msg: "Try to reduce expenses to hit 20% savings.",
+        msg: `Current savings rate is ${savingsRate.toFixed(1)}%. Target 20% for wealth building.`,
         val: `${savingsRate.toFixed(1)}%`,
       });
     } else {
       list.push({
-        title: "Spending Alert",
+        title: "Deficit Alert",
         type: "warning",
-        msg: "Expenses exceed income. Time to adjust.",
+        msg: "You're spending more than earning. Adjust expenses or increase income.",
         val: `${savingsRate.toFixed(1)}%`,
       });
     }
 
+    // Millionaire Milestone
     const yearsToMillion =
       monthlySavings > 0
         ? (1000000 - currentBalance) / (monthlySavings * 12)
@@ -344,6 +388,7 @@ export default function MergedFinancialDashboard() {
       });
     }
 
+    // Wealth Projection
     const projectedGain = compoundData[years]?.amount - currentBalance || 0;
     list.push({
       title: "Wealth Projection",
@@ -353,7 +398,16 @@ export default function MergedFinancialDashboard() {
     });
 
     return list;
-  }, [savingsRate, monthlySavings, currentBalance, years, annualReturn, compoundData]);
+  }, [
+    savingsRate,
+    spendingPercentOfIncome,
+    monthlySavings,
+    currentBalance,
+    years,
+    annualReturn,
+    compoundData,
+    totalIncome,
+  ]);
 
   // Add transaction handler
   const handleAddTransaction = () => {
@@ -548,7 +602,7 @@ export default function MergedFinancialDashboard() {
               ${Math.round(avgMonthlySpending).toLocaleString()}
             </p>
             <p className="text-slate-500 text-sm">
-              {totalIncome > 0 ? Math.round((avgMonthlySpending / totalIncome) * 100) : 0}% of income
+              {Math.round(spendingPercentOfIncome)}% of income
             </p>
           </motion.div>
 
@@ -564,10 +618,10 @@ export default function MergedFinancialDashboard() {
             </div>
             <p className="text-sm text-slate-400 mb-2">Current Savings Rate</p>
             <p className="text-3xl font-black text-white mb-2">
-              {savingsRate.toFixed(0)}%
+              {savingsRate.toFixed(1)}%
             </p>
             <p className={`text-sm font-semibold ${savingsRate >= 20 ? 'text-emerald-400' : 'text-amber-400'}`}>
-              {savingsRate >= 20 ? "✓ Above 20% target" : "📈 Boost to 20%"}
+              {savingsRate >= 20 ? "✓ Above 20% target" : savingsRate > 0 ? "📈 Boost to 20%" : "⚠️ Negative Rate"}
             </p>
           </motion.div>
 
@@ -1122,3 +1176,4 @@ function Slider({
     </div>
   );
 }
+
