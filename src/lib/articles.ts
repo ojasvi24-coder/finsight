@@ -1,3 +1,7 @@
+"use client";
+
+import { TrendingUp, BookOpen, PiggyBank, Activity, Zap } from "lucide-react";
+
 export interface Article {
   slug: string;
   title: string;
@@ -5,9 +9,15 @@ export interface Article {
   time: string;
   description: string;
   content: { heading?: string; text: string | string[] }[];
+  // Added fields from the new articles
+  icon?: any;
+  color?: string;
+  image?: string;
+  stats?: string;
 }
 
 export const articles: Article[] = [
+  // --- YOUR ORIGINAL ARTICLES ---
   {
     slug: "50-30-20-framework",
     title: "The 50/30/20 Framework",
@@ -489,6 +499,318 @@ export const articles: Article[] = [
           "✓ In retirement, you'll need to pay taxes on 401(k) withdrawals, but Roth is tax-free",
           "✓ The order matters: Match → Roth → 401(k) → HSA → Taxable",
           "✓ Over a lifetime, proper tax optimization saves $100,000-500,000"
+        ]
+      }
+    ]
+  },
+  // --- NEW ARTICLES FROM CLAUDE FILE ---
+  {
+    slug: "asset-allocation",
+    title: "The Art of Asset Allocation",
+    description: "Discover how to optimize your portfolio across multiple asset classes for maximum returns with minimal risk.",
+    category: "Investing",
+    time: "12 min read",
+    icon: TrendingUp,
+    color: "from-blue-600 to-cyan-500",
+    image: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+    stats: "73%",
+    content: [
+      {
+        heading: "Understanding Asset Allocation",
+        text: "Asset allocation is the practice of dividing your investment portfolio among different asset categories, such as stocks, bonds, real estate, and cash. This strategy is crucial because different assets perform differently under various market conditions. When stocks are declining, bonds might be stable or appreciating, and vice versa."
+      },
+      {
+        heading: "The Three Main Asset Classes",
+        text: [
+          "• Equities (Stocks): Represent ownership in companies. They offer high growth potential but come with higher volatility and risk. Historically, stocks have returned about 10% annually over long periods.",
+          "• Fixed Income (Bonds): Represent loans to governments or corporations. They provide steady income through interest payments and are less volatile than stocks. Bond returns typically range from 3-6% depending on type and duration.",
+          "• Alternative Assets: Include real estate, commodities, and private equity. These often move independently of stocks and bonds, providing diversification benefits."
+        ]
+      },
+      {
+        heading: "The 60/30/10 Rule",
+        text: "A classic allocation strategy for balanced investors allocates 60% to stocks, 30% to bonds, and 10% to alternatives. This provides growth potential while managing risk. However, your allocation should depend on your age, risk tolerance, and investment timeline. Younger investors can afford more risk (80/20 stocks/bonds), while those near retirement might prefer 40/60."
+      },
+      {
+        heading: "Rebalancing Your Portfolio",
+        text: "Market movements will cause your allocation to drift from your target. If stocks soar, they might become 70% of your portfolio instead of 60%. Annual rebalancing—selling winners and buying losers—maintains your desired risk level and forces a disciplined approach: buy low, sell high. This simple practice can add 1-2% to annual returns over time."
+      },
+      {
+        heading: "Modern Portfolio Theory",
+        text: "Nobel Prize winner Harry Markowitz proved that combining assets reduces overall portfolio risk without sacrificing returns. The key is correlation: assets that don't move together provide diversification benefits. A portfolio of 15-20 uncorrelated assets can reduce volatility by 30-40% compared to a single-asset investment."
+      },
+      {
+        heading: "Key Takeaways",
+        text: [
+          "• Diversification across asset classes is one of the few free lunches in investing",
+          "• Your allocation should match your risk tolerance and time horizon",
+          "• Rebalance annually to maintain discipline and capture gains",
+          "• Start early and let compound interest work for you",
+          "• Review and adjust your allocation every 3-5 years as circumstances change"
+        ]
+      }
+    ]
+  },
+  {
+    slug: "market-history",
+    title: "Market History Lessons",
+    description: "Learn from centuries of market cycles and understand the patterns that drive wealth creation.",
+    category: "Strategy",
+    time: "15 min read",
+    icon: BookOpen,
+    color: "from-purple-600 to-pink-500",
+    image: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+    stats: "89%",
+    content: [
+      {
+        heading: "The Power of Long-Term Investing",
+        text: "History repeatedly shows that stock markets create wealth over long periods despite frequent crashes and corrections. The S&P 500 has returned approximately 10% annually since 1926, transforming a $1,000 investment in 1926 into over $600,000 by 2024. This remarkable return came despite the Great Depression, multiple recessions, world wars, and countless crises."
+      },
+      {
+        heading: "Famous Market Crashes and Recovery",
+        text: [
+          "• 1929 Great Crash: The market fell 89% and took 25 years to recover. Those who stayed invested and didn't panic bought amazing opportunities.",
+          "• 1987 Black Monday: Markets fell 22% in a single day. Yet it recovered fully within 18 months.",
+          "• 2008 Financial Crisis: A 57% decline, but recovered within 5 years and went on to create new all-time highs.",
+          "• 2020 COVID Crash: 34% decline, but recovered in just 5 months and reached record highs.",
+          "The pattern: Every crash recovered and created new highs."
+        ]
+      },
+      {
+        heading: "The Lost Decade & Missed Opportunities",
+        text: "The 2000s are called 'the lost decade' because stock returns were near zero. Yet investors who remained diversified, continued investing, and rebalanced actually earned 6-8% annually. This teaches us that diversification, dollar-cost averaging, and discipline matter more than trying to time the market."
+      },
+      {
+        heading: "Inflation Lessons from History",
+        text: "From 1950 to 2024, the U.S. experienced significant inflation periods, yet stocks outpaced inflation by 6-7% annually. Cash and bonds sometimes lagged inflation, eroding purchasing power. This is why stocks are essential for long-term wealth building—they're the only asset class that consistently beats inflation over 20+ year periods."
+      },
+      {
+        heading: "Valuation Cycles & Market Psychology",
+        text: "Markets oscillate between fear and greed. When stocks are cheap (low valuations), people fear the future and sell. When expensive (high valuations), optimism peaks and people buy aggressively. The greatest wealth is built by contrarian thinkers: buying when fearful and selling when greedy. Warren Buffett's 'be fearful when others are greedy and greedy when others are fearful' summarizes this perfectly."
+      },
+      {
+        heading: "Key Historical Lessons",
+        text: [
+          "• Time in the market beats timing the market",
+          "• Panic selling at market lows creates permanent losses",
+          "• Market crashes are buying opportunities for long-term investors",
+          "• Diversification cushions against severe downturns",
+          "• Average investors underperform by 3-4% annually due to poor timing and emotional decisions",
+          "• Compound returns accelerate with time—most wealth is created in the final 10-20 years"
+        ]
+      }
+    ]
+  },
+  {
+    slug: "algorithmic-saving",
+    title: "Algorithmic Saving Strategies",
+    description: "Automate your finances with intelligent saving algorithms that adapt to your lifestyle.",
+    category: "Budgeting",
+    time: "10 min read",
+    icon: PiggyBank,
+    color: "from-emerald-600 to-teal-500",
+    image: "linear-gradient(135deg, #11998e 0%, #38ef7d 100%)",
+    stats: "95%",
+    content: [
+      {
+        heading: "Why Automation Beats Willpower",
+        text: "Manual budgeting relies on willpower, which is a finite resource. Behavioral economists show that automated systems are 85% more effective than manual budgeting. When savings are automated before you see the money, you never miss it and won't be tempted to spend it."
+      },
+      {
+        heading: "The 50/30/20 Rule",
+        text: "Divide your after-tax income into three categories: 50% for needs (housing, food, utilities), 30% for wants (entertainment, dining), and 20% for savings and debt repayment. Automate transfers: on payday, immediately move 20% to savings, then manage the remaining 80%. This ensures savings happen before spending."
+      },
+      {
+        heading: "Dollar-Cost Averaging (DCA)",
+        text: "Instead of trying to time the market with lump-sum investments, invest equal amounts at regular intervals (monthly, quarterly). If you invest $500/month regardless of market conditions, you naturally buy more shares when prices are low and fewer when prices are high. Over 20 years, DCA typically beats lump-sum investing by 2-3% due to this psychological advantage and reduced timing risk."
+      },
+      {
+        heading: "Pay Yourself First",
+        text: "Set up automatic transfers to savings on payday, before paying bills. This reverse budgeting approach (save first, spend what's left) is more effective than trying to save leftovers. Most successful wealth-builders save 15-25% of gross income automatically. After 30 years at 10% annual returns, 20% savings yields approximately 8-10x your annual income."
+      },
+      {
+        heading: "The Savings Algorithm",
+        text: [
+          "1. Calculate your net monthly income",
+          "2. Allocate 20% to automated savings (or as much as possible)",
+          "3. Split remaining 80% into fixed costs (50%) and discretionary (30%)",
+          "4. Invest savings in low-cost index funds with automatic contributions",
+          "5. Increase savings by 1% annually as income grows (behavioral trick: you don't feel the loss)",
+          "6. Track progress quarterly (seeing growth motivates continued discipline)"
+        ]
+      },
+      {
+        heading: "Automate Lifestyle Inflation",
+        text: "When you get a raise, automatically allocate 50% to savings and 50% to lifestyle improvement. If your salary increases by $600/month, save $300 and spend $300. This way, your standard of living improves while your savings rate accelerates. After 10 raises, your savings could increase by 150% while maintaining happiness."
+      },
+      {
+        heading: "Best Practices",
+        text: [
+          "• Use employer 401(k) matching (free money—don't leave it on the table)",
+          "• Set up automatic Roth IRA contributions ($500/month = $6k/year)",
+          "• Automate bill payments to avoid late fees (and their 20%+ damage to wealth)",
+          "• Review automation quarterly and increase percentages annually",
+          "• Make saving invisible—out of sight, out of mind"
+        ]
+      }
+    ]
+  },
+  {
+    slug: "wealth-mathematics",
+    title: "The Mathematics of Wealth",
+    description: "Understand compound interest, exponential growth, and the power of time in building generational wealth.",
+    category: "Investing",
+    time: "14 min read",
+    icon: Activity,
+    color: "from-amber-600 to-orange-500",
+    image: "linear-gradient(135deg, #fa709a 0%, #fee140 100%)",
+    stats: "82%",
+    content: [
+      {
+        heading: "The Compound Interest Formula",
+        text: "Albert Einstein allegedly called compound interest 'the eighth wonder of the world.' The formula is simple: A = P(1 + r/n)^(nt), where A is final amount, P is principal, r is annual rate, n is compounds per year, and t is time in years. What makes this powerful is the exponential nature—returns generate their own returns."
+      },
+      {
+        heading: "Time is Your Greatest Asset",
+        text: "Consider two investors: Alice invests $5,000/year for 10 years (ages 25-34), then stops. Bob starts at 35 and invests $5,000/year for 30 years (ages 35-64). Assuming 10% annual returns, Alice's $50,000 invested grows to $1.2 million by age 65. Bob's $150,000 invested grows to $1.4 million. Alice invested 1/3 as much but ended with 86% of Bob's wealth purely through starting early. The 10 extra years of compounding on Alice's initial investments are worth $200,000."
+      },
+      {
+        heading: "The Rule of 72",
+        text: "Divide 72 by your annual return rate to find how many years until your money doubles. At 6% returns, your wealth doubles every 12 years. At 10%, every 7.2 years. At 12%, every 6 years. This means a $50,000 investment at 10% returns becomes $100,000 in 7 years, $200,000 in 14 years, $400,000 in 21 years, and $800,000 in 28 years. Time exponentially accelerates wealth creation."
+      },
+      {
+        heading: "The Power of Regular Contributions",
+        text: "Investing $500/month at 10% annual returns for 30 years creates $915,000. The math: Future Value = PMT × [((1 + r)^n - 1) / r]. Of this amount, you contributed $180,000, and compound interest created $735,000 (80% of your wealth). If you doubled your contributions to $1,000/month, you'd have $1.83 million—nearly 2x with double the input. Consistency multiplies exponentially."
+      },
+      {
+        heading: "Inflation & Real Returns",
+        text: "A 5% annual return sounds great, but with 3% inflation, your real return is only 2%. This is why stocks matter: they average 7% real returns (after inflation) over decades. A $10,000 investment earning 2% real returns grows to $19,000 in 30 years. The same investment at 7% real returns grows to $76,000. The difference: $57,000 from just 5% higher real returns. This is why inflation-beating assets are essential."
+      },
+      {
+        heading: "The Millionaire Equation",
+        text: "To become a millionaire: (Monthly Savings × 12 × Years × [(1 + Annual Return)^Years - 1] / Annual Return) ≥ $1,000,000. Examples: Save $500/month at 8% returns: 27 years. Save $1,000/month at 8% returns: 20 years. Save $2,000/month at 10% returns: 15 years. The formula shows that increasing monthly savings or annual returns dramatically accelerates wealth creation."
+      },
+      {
+        heading: "Key Mathematical Insights",
+        text: [
+          "• Compound returns are exponential, not linear—the power accelerates over time",
+          "• Time is worth more than money—10 extra years > 100% higher savings rate",
+          "• Every 1% in annual returns difference compounds into millions over 30 years",
+          "• Regular contributions are more impactful than investment timing",
+          "• Real returns (after inflation) matter more than nominal returns",
+          "• Starting early is the most powerful wealth-building tool available"
+        ]
+      }
+    ]
+  },
+  {
+    slug: "risk-management",
+    title: "Advanced Risk Management",
+    description: "Master hedging strategies and portfolio protection techniques used by institutional investors.",
+    category: "Strategy",
+    time: "13 min read",
+    icon: Zap,
+    color: "from-rose-600 to-red-500",
+    image: "linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%)",
+    stats: "76%",
+    content: [
+      {
+        heading: "Understanding Risk vs. Volatility",
+        text: "Risk and volatility are often confused. Volatility is price fluctuation (happening frequently). Risk is permanent loss of capital (rare for diversified portfolios). A stock might swing 20% annually (high volatility) but still compound at 10% annually (low risk). Conversely, a bond might be stable (low volatility) but lose purchasing power to inflation (high risk). Understanding this distinction changes investment strategy."
+      },
+      {
+        heading: "The Correlation Advantage",
+        text: "Assets that move independently (low correlation) provide diversification benefits. When stocks fall 20%, bonds typically rise 5-10%. A 60/40 stocks/bonds portfolio would only decline 8-12% instead of 20%. Adding uncorrelated assets (real estate, commodities, foreign stocks) further reduces overall portfolio risk. A well-diversified portfolio of 15-20 assets can reduce volatility by 40% compared to pure stock investing."
+      },
+      {
+        heading: "Hedging Strategies",
+        text: [
+          "• Protective Puts: Buying put options on stocks you own creates a safety net—you keep gains but limit losses (costs 1-3% annually).",
+          "• Inverse ETFs: These move opposite to the market—valuable insurance during crashes but costly if held long-term.",
+          "• Bonds as a Hedge: Long-term bonds often rise when stocks fall, providing natural portfolio protection.",
+          "• Sector Diversification: Avoiding concentration in any single sector (tech, finance) prevents catastrophic losses.",
+          "• Geographic Diversification: Global diversification means crises in one country don't devastate your entire portfolio."
+        ]
+      },
+      {
+        heading: "The Efficient Frontier",
+        text: "Modern portfolio theory identifies an 'efficient frontier'—combinations of assets that provide maximum returns for a given risk level. Finding your position on this frontier (based on your risk tolerance and time horizon) is key to investing success. An 80-year-old needs different positioning than a 25-year-old. Tools like Markowitz optimization help identify the ideal asset allocation."
+      },
+      {
+        heading: "Tail Risk & Black Swan Events",
+        text: "Normal market corrections happen often (every 3-5 years). But black swan events (unexpected 30-50% crashes) occasionally occur and destroy unprepared investors. Tail risk hedging involves allocating 3-5% to assets that surge during crises (gold, long-dated bonds, crisis alpha strategies). This small allocation prevents catastrophic losses and provides capital to buy opportunities during crashes."
+      },
+      {
+        heading: "Kelly Criterion & Position Sizing",
+        text: "Professional investors use the Kelly Criterion to determine optimal position sizes: f = (bp - q) / b, where f is fraction to invest, b is odds, p is win probability, and q is loss probability. This prevents over-concentration. If you're 60% confident in an investment with 2:1 odds, you should allocate roughly 20% of capital, not 100%. Proper position sizing prevents ruin even when wrong."
+      },
+      {
+        heading: "Risk Management Best Practices",
+        text: [
+          "• Diversify across 15-20 uncorrelated assets",
+          "• Maintain 20-30% in defensive assets (bonds, cash) for buying opportunities",
+          "• Rebalance quarterly to maintain target allocations",
+          "• Use dollar-cost averaging to smooth volatility",
+          "• Implement stop losses (with caution—they lock in losses sometimes)",
+          "• Hedge tail risk with 3-5% in crisis-alpha investments",
+          "• Monitor correlation matrices quarterly (correlations break during crises)"
+        ]
+      }
+    ]
+  },
+  {
+    slug: "tax-optimization",
+    title: "Tax-Efficient Investing",
+    description: "Maximize after-tax returns with strategic tax planning and optimization techniques.",
+    category: "Budgeting",
+    time: "11 min read",
+    icon: BookOpen,
+    color: "from-indigo-600 to-blue-500",
+    image: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
+    stats: "88%",
+    content: [
+      {
+        heading: "The Tax Efficiency Problem",
+        text: "The average investor loses 1-2% of returns annually to taxes. Over 30 years, this compounds into 30-50% lower wealth. A $100,000 portfolio earning 8% returns grows to $1.0M in 30 years before taxes. After 1.5% annual tax drag, it's only $820,000—a $180,000 difference from inefficient tax strategies. Fortunately, many tax optimization techniques are legal and available to all investors."
+      },
+      {
+        heading: "Tax-Advantaged Accounts",
+        text: [
+          "• 401(k): Contributes $23,500/year (2024), grows tax-deferred, employer matching is free money. Withdrawals taxed at retirement rates (typically lower). After 30 years, a $500/month 401(k) contribution grows to $915,000 tax-deferred vs $750,000 in taxable accounts.",
+          "• Roth IRA: $7,000/year grows tax-free forever. You pay taxes now (lower rates if young), but gains are never taxed. Ideal for young investors who'll have 40+ years of tax-free growth.",
+          "• HSA: If using high-deductible health plans, Health Savings Accounts allow $4,150/year (2024) contributions, triple tax-advantaged: deductible, grows tax-free, withdrawals for medical expenses tax-free. Often called the 'stealth IRA.'",
+          "• 529 Plans: For education savings, provide tax-free growth and distributions for education costs. Can also apply to K-12 and apprenticeships now."
+        ]
+      },
+      {
+        heading: "Tax-Loss Harvesting",
+        text: "When a stock falls below your purchase price, selling it creates a tax loss you can use to offset gains elsewhere. Then immediately buy a similar (but not identical) asset to maintain your position. If you realize $10,000 in gains and $10,000 in losses, you eliminate your tax bill entirely. Done systematically, this can save 1-2% annually. Some brokers automate this process, making it passive income."
+      },
+      {
+        heading: "Asset Location Strategy",
+        text: "Place assets strategically based on tax efficiency: Tax-inefficient (bonds, REITs generating ordinary income) go in tax-advantaged accounts. Tax-efficient (index funds with low turnover, long-term capital gains) go in taxable accounts. This simple reallocation can save 0.5-1% annually. Many wealthy investors place $100,000+ in 401(k)s, $50,000+ in Roth IRAs, $100,000+ in taxable index funds following this strategy."
+      },
+      {
+        heading: "Long-Term Capital Gains Preferential Rates",
+        text: "If you hold stocks for over 1 year, gains are taxed at preferential rates: 0% (if income < $47,025), 15% (if < $518,900), or 20% (above that). Compare to ordinary income rates up to 37%. This alone justifies holding quality stocks long-term. A stock with 100% gains held 1+ years: 15% tax = $8,500 on $50,000. Same gain held <1 year: 35% tax = $17,500. Just holding longer saves $9,000!"
+      },
+      {
+        heading: "Charitable Giving Strategies",
+        text: "Donating appreciated stocks to charity achieves three benefits: (1) You avoid capital gains tax on the appreciation, (2) You get a deduction for the full fair market value, (3) The charity receives the full amount. If you've gained $50,000 on a stock and want to donate $50,000 to charity, give the stock, not cash. You save 15% in taxes ($7,500) that can be reinvested."
+      },
+      {
+        heading: "Tax Optimization Checklist",
+        text: [
+          "• Max out 401(k) contributions ($23,500/year) to reduce taxable income",
+          "• Contribute to Roth IRA if eligible ($7,000/year tax-free growth forever)",
+          "• Open HSA if eligible (triple tax advantage, often ignored)",
+          "• Use tax-loss harvesting quarterly to offset gains",
+          "• Place bond funds and REITs in tax-advantaged accounts",
+          "• Hold stocks 1+ year for preferential capital gains rates",
+          "• Donate appreciated securities instead of cash to charity",
+          "• Review tax situation quarterly, not just at year-end",
+          "• Consider Roth conversions in low-income years",
+          "• Track wash sales and avoid repurchasing sold losers within 30 days"
         ]
       }
     ]
