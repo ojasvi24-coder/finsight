@@ -211,7 +211,7 @@ export default function LearnPage() {
           className="grid gap-8 md:grid-cols-2 lg:grid-cols-3 mb-16"
         >
           {articles.map((article) => {
-            const IconComponent = article.icon;
+            const IconComponent = article.icon as React.ElementType;
             return (
               <motion.div 
                 key={article.slug}
@@ -290,7 +290,7 @@ export default function LearnPage() {
                           } : {}}
                           transition={{ duration: 0.3 }}
                         >
-                          {article.stats}
+                          {article.stats[0]?.value}
                         </motion.div>
                       </motion.div>
 

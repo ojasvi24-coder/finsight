@@ -184,4 +184,3 @@ export default async function ArticlePage({
     </div>
   );
 }
-
