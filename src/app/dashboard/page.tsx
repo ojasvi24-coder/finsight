@@ -57,15 +57,8 @@ export default function MergedFinancialDashboard() {
   const [annualReturn, setAnnualReturn] = useState(8);
   const [years, setYears] = useState(30);
 
-  // Transaction Management
+  // Transaction Management - Expenses ONLY
   const [transactions, setTransactions] = useState<Transaction[]>([
-    {
-      id: "1",
-      name: "Salary Deposit",
-      category: "Income",
-      amount: 6000,
-      date: "2024-06-15",
-    },
     {
       id: "2",
       name: "Rent Payment",
@@ -88,13 +81,6 @@ export default function MergedFinancialDashboard() {
       date: "2024-06-05",
     },
     {
-      id: "5",
-      name: "Investment Transfer",
-      category: "Savings",
-      amount: 1200,
-      date: "2024-06-01",
-    },
-    {
       id: "6",
       name: "Electricity Bill",
       category: "Utilities",
@@ -115,11 +101,21 @@ export default function MergedFinancialDashboard() {
       amount: -65,
       date: "2024-06-18",
     },
+    {
+      id: "5",
+      name: "Investment Transfer",
+      category: "Savings",
+      amount: -1200,
+      date: "2024-06-01",
+    },
   ]);
+
+  // Monthly Income - Separate from transactions
+  const [monthlyIncome, setMonthlyIncome] = useState(6000);
 
   const [newTransaction, setNewTransaction] = useState({
     name: "",
-    category: "Expense",
+    category: "Housing",
     amount: 0,
   });
 
@@ -206,57 +202,47 @@ export default function MergedFinancialDashboard() {
   };
 
   // Calculate metrics from transactions
-  const incomeTransactions = useMemo(
-    () => transactions.filter((t) => t.amount > 0),
-    [transactions]
-  );
-
-  const expenseTransactions = useMemo(
-    () => transactions.filter((t) => t.amount < 0),
-    [transactions]
-  );
-
-  const totalIncome = useMemo(
-    () => incomeTransactions.reduce((sum, t) => sum + t.amount, 0),
-    [incomeTransactions]
-  );
-
+  // All transactions here are EXPENSES (negative amounts)
   const totalExpenses = useMemo(
-    () => Math.abs(expenseTransactions.reduce((sum, t) => sum + t.amount, 0)),
-    [expenseTransactions]
+    () => Math.abs(transactions.reduce((sum, t) => sum + t.amount, 0)),
+    [transactions]
   );
 
-  const netCashFlow = useMemo(() => totalIncome - totalExpenses, [totalIncome, totalExpenses]);
+  // Monthly income is separate
+  const totalMonthlyIncome = monthlyIncome;
+
+  const netCashFlow = useMemo(
+    () => totalMonthlyIncome - totalExpenses,
+    [totalMonthlyIncome, totalExpenses]
+  );
 
   const currentBalance = useMemo(
     () => initialInvestment + netCashFlow,
     [initialInvestment, netCashFlow]
   );
 
-  // Calculate monthly averages based on actual transactions
-  const avgMonthlyIncome = useMemo(() => {
-    if (incomeTransactions.length === 0) return 0;
-    return totalIncome / incomeTransactions.length;
-  }, [totalIncome, incomeTransactions]);
-
+  // Calculate monthly averages
   const avgMonthlySpending = useMemo(() => {
-    if (expenseTransactions.length === 0) return 0;
-    return totalExpenses / expenseTransactions.length;
-  }, [totalExpenses, expenseTransactions]);
+    if (transactions.length === 0) return 0;
+    return totalExpenses / transactions.length;
+  }, [totalExpenses, transactions]);
 
   const spendingPercentOfIncome = useMemo(() => {
-    if (totalIncome === 0) return 0;
-    return (totalExpenses / totalIncome) * 100;
-  }, [totalExpenses, totalIncome]);
+    if (totalMonthlyIncome === 0) return 0;
+    return (totalExpenses / totalMonthlyIncome) * 100;
+  }, [totalExpenses, totalMonthlyIncome]);
 
   const savingsRate = useMemo(() => {
-    if (totalIncome === 0) return 0;
-    return ((netCashFlow / totalIncome) * 100);
-  }, [netCashFlow, totalIncome]);
+    if (totalMonthlyIncome === 0) return 0;
+    return ((netCashFlow / totalMonthlyIncome) * 100);
+  }, [netCashFlow, totalMonthlyIncome]);
 
   const previousBalance = initialInvestment;
   const balanceChange = currentBalance - previousBalance;
-  const balanceChangePercent = previousBalance > 0 ? ((balanceChange / previousBalance) * 100).toFixed(1) : "0";
+  const balanceChangePercent =
+    previousBalance > 0
+      ? ((balanceChange / previousBalance) * 100).toFixed(1)
+      : "0";
 
   // Generate monthly net worth trend
   const monthlyTrendData = useMemo(() => {
@@ -284,8 +270,17 @@ export default function MergedFinancialDashboard() {
     return data;
   }, [currentBalance, annualReturn, years]);
 
+  // Calculate investment growth
+  const investmentGrowthAmount = useMemo(() => {
+    return compoundData[1]?.amount - currentBalance || 0;
+  }, [compoundData, currentBalance]);
+
+  const investmentTarget = useMemo(() => {
+    return Math.round(currentBalance * 1.25); // 25% growth target
+  }, [currentBalance]);
+
   // Cash Flow Projection
-  const monthlySavings = netCashFlow / (incomeTransactions.length || 1);
+  const monthlySavings = netCashFlow;
 
   interface ProjectionPoint {
     month: string;
@@ -319,11 +314,11 @@ export default function MergedFinancialDashboard() {
     const list = [];
 
     // Spending Alert
-    if (totalIncome === 0) {
+    if (totalMonthlyIncome === 0) {
       list.push({
         title: "No Income Recorded",
         type: "warning",
-        msg: "Add income transactions to track your financial health.",
+        msg: "Set your monthly income to track financial health.",
         val: "Action",
       });
     } else if (spendingPercentOfIncome > 80) {
@@ -406,7 +401,7 @@ export default function MergedFinancialDashboard() {
     years,
     annualReturn,
     compoundData,
-    totalIncome,
+    totalMonthlyIncome,
   ]);
 
   // Add transaction handler
@@ -414,10 +409,7 @@ export default function MergedFinancialDashboard() {
     if (!newTransaction.name || newTransaction.amount === 0) return;
 
     const id = Date.now().toString();
-    const amount =
-      newTransaction.category === "Income"
-        ? Math.abs(newTransaction.amount)
-        : -Math.abs(newTransaction.amount);
+    const amount = -Math.abs(newTransaction.amount); // Always negative for expenses
 
     setTransactions([
       ...transactions,
@@ -430,7 +422,7 @@ export default function MergedFinancialDashboard() {
       },
     ]);
 
-    setNewTransaction({ name: "", category: "Expense", amount: 0 });
+    setNewTransaction({ name: "", category: "Housing", amount: 0 });
   };
 
   // Delete transaction handler
@@ -458,7 +450,10 @@ export default function MergedFinancialDashboard() {
     },
   } as const;
 
-  if (!isClient) return <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950" />;
+  if (!isClient)
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950" />
+    );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50 selection:bg-cyan-500/30">
@@ -494,7 +489,9 @@ export default function MergedFinancialDashboard() {
               </motion.div>
               FinSight Dashboard
             </h1>
-            <p className="text-slate-400">Real-time financial insights and growth tracking</p>
+            <p className="text-slate-400">
+              Real-time financial insights and growth tracking
+            </p>
           </div>
           <Link href="/learn">
             <motion.button
@@ -533,14 +530,17 @@ export default function MergedFinancialDashboard() {
                 {asset.symbol}
               </span>
               <span className="text-slate-300 font-mono group-hover:text-white transition-colors">
-                ${asset.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                ${asset.price.toLocaleString(undefined, {
+                  maximumFractionDigits: 2,
+                })}
               </span>
               <span
                 className={`text-xs font-bold ${
                   asset.change >= 0 ? "text-emerald-400" : "text-red-400"
                 }`}
               >
-                {asset.change >= 0 ? "▲" : "▼"} {Math.abs(asset.change).toFixed(2)}%
+                {asset.change >= 0 ? "▲" : "▼"}{" "}
+                {Math.abs(asset.change).toFixed(2)}%
               </span>
               <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity text-cyan-400" />
             </a>
@@ -620,8 +620,20 @@ export default function MergedFinancialDashboard() {
             <p className="text-3xl font-black text-white mb-2">
               {savingsRate.toFixed(1)}%
             </p>
-            <p className={`text-sm font-semibold ${savingsRate >= 20 ? 'text-emerald-400' : 'text-amber-400'}`}>
-              {savingsRate >= 20 ? "✓ Above 20% target" : savingsRate > 0 ? "📈 Boost to 20%" : "⚠️ Negative Rate"}
+            <p
+              className={`text-sm font-semibold ${
+                savingsRate >= 20
+                  ? "text-emerald-400"
+                  : savingsRate > 0
+                  ? "text-amber-400"
+                  : "text-red-400"
+              }`}
+            >
+              {savingsRate >= 20
+                ? "✓ Above 20% target"
+                : savingsRate > 0
+                ? "📈 Boost to 20%"
+                : "⚠️ Negative Rate"}
             </p>
           </motion.div>
 
@@ -636,9 +648,12 @@ export default function MergedFinancialDashboard() {
               </div>
             </div>
             <p className="text-sm text-slate-400 mb-2">Investment Growth</p>
-            <p className="text-3xl font-black text-white mb-2">+{annualReturn}% YTD</p>
+            <p className="text-3xl font-black text-white mb-2">
+              +{annualReturn}% YTD
+            </p>
             <p className="text-slate-500 text-sm">
-              ${currentBalance.toLocaleString()} → ${Math.round(currentBalance * (1 + annualReturn / 100)).toLocaleString()} target
+              ${currentBalance.toLocaleString()} → $
+              {investmentTarget.toLocaleString()} target
             </p>
           </motion.div>
         </motion.div>
@@ -655,22 +670,31 @@ export default function MergedFinancialDashboard() {
               className="rounded-xl bg-gradient-to-br from-slate-800/50 to-slate-900/50 border border-slate-700/50 p-8 backdrop-blur-md"
             >
               <div className="mb-6">
-                <h2 className="text-2xl font-bold text-white mb-2">Net Worth Trend</h2>
-                <p className="text-slate-400">6-month projection and growth tracking</p>
+                <h2 className="text-2xl font-bold text-white mb-2">
+                  Net Worth Trend
+                </h2>
+                <p className="text-slate-400">
+                  6-month projection and growth tracking
+                </p>
               </div>
               <div className="h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={monthlyTrendData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                     <XAxis dataKey="month" stroke="#475569" />
-                    <YAxis stroke="#475569" tickFormatter={(v) => `$${v / 1000}k`} />
+                    <YAxis
+                      stroke="#475569"
+                      tickFormatter={(v) => `$${v / 1000}k`}
+                    />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: "#0f172a",
                         border: "1px solid #1e293b",
                         borderRadius: "8px",
                       }}
-                      formatter={(value: any) => `$${Number(value).toLocaleString()}`}
+                      formatter={(value: any) =>
+                        `$${Number(value).toLocaleString()}`
+                      }
                     />
                     <Legend />
                     <Line
@@ -736,7 +760,9 @@ export default function MergedFinancialDashboard() {
                         border: "1px solid #1e293b",
                         borderRadius: "8px",
                       }}
-                      formatter={(value: any) => `$${Number(value).toLocaleString()}`}
+                      formatter={(value: any) =>
+                        `$${Number(value).toLocaleString()}`
+                      }
                     />
                     <Area
                       type="monotone"
@@ -796,7 +822,9 @@ export default function MergedFinancialDashboard() {
                     className="w-full py-4 rounded-2xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold shadow-lg shadow-cyan-500/20 hover:shadow-lg transition-all flex items-center justify-center gap-2"
                   >
                     <Filter className="h-4 w-4" />{" "}
-                    {showAIModeler ? "Hide AI Scenarios" : "Simulate Budget Changes"}
+                    {showAIModeler
+                      ? "Hide AI Scenarios"
+                      : "Simulate Budget Changes"}
                   </motion.button>
                 </div>
               </div>
@@ -868,12 +896,25 @@ export default function MergedFinancialDashboard() {
               <div className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-slate-500 uppercase">
+                    Monthly Income
+                  </label>
+                  <input
+                    type="number"
+                    value={monthlyIncome}
+                    onChange={(e) => setMonthlyIncome(Number(e.target.value))}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-cyan-500 outline-none transition-colors"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-500 uppercase">
                     Initial Investment
                   </label>
                   <input
                     type="number"
                     value={initialInvestment}
-                    onChange={(e) => setInitialInvestment(Number(e.target.value))}
+                    onChange={(e) =>
+                      setInitialInvestment(Number(e.target.value))
+                    }
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-cyan-500 outline-none transition-colors"
                   />
                 </div>
@@ -901,7 +942,9 @@ export default function MergedFinancialDashboard() {
               <div className="absolute top-0 right-0 p-4 opacity-10">
                 <Lightbulb className="h-12 w-12" />
               </div>
-              <h3 className="text-lg font-bold mb-6 text-cyan-400">AI Intelligence</h3>
+              <h3 className="text-lg font-bold mb-6 text-cyan-400">
+                AI Intelligence
+              </h3>
               <div className="space-y-4 max-h-[400px] overflow-y-auto">
                 {insights.map((insight, i) => (
                   <motion.div
@@ -937,7 +980,7 @@ export default function MergedFinancialDashboard() {
           </aside>
         </div>
 
-        {/* Recent Transactions */}
+        {/* Recent Transactions - EXPENSES ONLY */}
         <motion.div
           variants={itemVariants}
           initial="hidden"
@@ -945,12 +988,14 @@ export default function MergedFinancialDashboard() {
           className="grid gap-8 lg:grid-cols-3"
         >
           <div className="lg:col-span-2 rounded-xl bg-gradient-to-br from-slate-800/50 to-slate-900/50 border border-slate-700/50 p-8 backdrop-blur-md">
-            <h2 className="text-2xl font-bold text-white mb-6">Recent Transactions</h2>
+            <h2 className="text-2xl font-bold text-white mb-6">
+              Recent Expenses
+            </h2>
 
-            {/* Add Transaction Form */}
+            {/* Add Expense Form */}
             <div className="mb-8 p-4 rounded-lg bg-slate-900/50 border border-slate-700/30">
               <h3 className="text-sm font-bold text-cyan-400 mb-4 flex items-center gap-2">
-                <Plus className="h-4 w-4" /> Add New Transaction
+                <Plus className="h-4 w-4" /> Add New Expense
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                 <input
@@ -958,7 +1003,10 @@ export default function MergedFinancialDashboard() {
                   placeholder="Description"
                   value={newTransaction.name}
                   onChange={(e) =>
-                    setNewTransaction({ ...newTransaction, name: e.target.value })
+                    setNewTransaction({
+                      ...newTransaction,
+                      name: e.target.value,
+                    })
                   }
                   className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-cyan-500 outline-none transition-colors"
                 />
@@ -972,13 +1020,13 @@ export default function MergedFinancialDashboard() {
                   }
                   className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-cyan-500 outline-none transition-colors"
                 >
-                  <option value="Income">Income</option>
                   <option value="Housing">Housing</option>
                   <option value="Food">Food</option>
                   <option value="Transportation">Transportation</option>
                   <option value="Entertainment">Entertainment</option>
                   <option value="Utilities">Utilities</option>
                   <option value="Savings">Savings</option>
+                  <option value="Healthcare">Healthcare</option>
                   <option value="Other">Other</option>
                 </select>
                 <input
@@ -1007,7 +1055,9 @@ export default function MergedFinancialDashboard() {
             {/* Transaction List */}
             <div className="space-y-4 max-h-[400px] overflow-y-auto">
               {transactions.length === 0 ? (
-                <p className="text-slate-400 text-center py-8">No transactions yet. Add one to get started!</p>
+                <p className="text-slate-400 text-center py-8">
+                  No expenses yet. Add one to get started!
+                </p>
               ) : (
                 transactions.map((tx) => (
                   <motion.div
@@ -1018,12 +1068,8 @@ export default function MergedFinancialDashboard() {
                     className="flex items-center justify-between p-4 rounded-lg bg-slate-900/50 border border-slate-700/30 hover:border-slate-600/50 transition-colors group"
                   >
                     <div className="flex items-center gap-4 flex-1">
-                      <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-cyan-500/20 to-emerald-500/20 flex items-center justify-center border border-slate-700/50">
-                        {tx.amount > 0 ? (
-                          <ArrowDownRight className="h-5 w-5 text-emerald-400" />
-                        ) : (
-                          <ArrowUpRight className="h-5 w-5 text-red-400" />
-                        )}
+                      <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-red-500/20 to-orange-500/20 flex items-center justify-center border border-slate-700/50">
+                        <ArrowUpRight className="h-5 w-5 text-red-400" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-white">{tx.name}</p>
@@ -1032,13 +1078,8 @@ export default function MergedFinancialDashboard() {
                     </div>
                     <div className="flex items-center gap-4">
                       <div className="text-right">
-                        <p
-                          className={`font-bold ${
-                            tx.amount > 0 ? "text-emerald-400" : "text-red-400"
-                          }`}
-                        >
-                          {tx.amount > 0 ? "+" : ""}
-                          ${Math.abs(tx.amount).toLocaleString()}
+                        <p className="font-bold text-red-400">
+                          -${Math.abs(tx.amount).toLocaleString()}
                         </p>
                         <p className="text-xs text-slate-500">{tx.date}</p>
                       </div>
@@ -1077,7 +1118,7 @@ export default function MergedFinancialDashboard() {
                 whileTap={{ scale: 0.98 }}
                 className="w-full flex items-center justify-between p-4 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 hover:border-amber-500/50 transition-colors text-white font-semibold group"
               >
-                <span>💰 Add Transaction</span>
+                <span>💰 Add Expense</span>
                 <ArrowUpRight className="h-4 w-4 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
               </motion.button>
 
@@ -1113,8 +1154,9 @@ export default function MergedFinancialDashboard() {
             Master Your Finances
           </h3>
           <p className="text-slate-300 max-w-2xl mx-auto mb-6">
-            Explore our comprehensive learning materials to understand wealth-building
-            strategies, investment optimization, and tax planning.
+            Explore our comprehensive learning materials to understand
+            wealth-building strategies, investment optimization, and tax
+            planning.
           </p>
           <Link href="/learn">
             <motion.button
@@ -1176,4 +1218,3 @@ function Slider({
     </div>
   );
 }
-
