@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   TrendingUp,
   PiggyBank,
@@ -24,6 +24,8 @@ import {
   Globe,
   Trash2,
   Plus,
+  Download,
+  X,
 } from "lucide-react";
 import {
   LineChart,
@@ -46,6 +48,7 @@ interface Transaction {
   category: string;
   amount: number;
   date: string;
+  type: "expense"; // Only expenses, no income here
 }
 
 export default function MergedFinancialDashboard() {
@@ -57,74 +60,76 @@ export default function MergedFinancialDashboard() {
   const [annualReturn, setAnnualReturn] = useState(8);
   const [years, setYears] = useState(30);
 
-  // Transaction Management - Expenses ONLY
+  // EXPENSES ONLY - Completely separate from income
   const [transactions, setTransactions] = useState<Transaction[]>([
     {
       id: "2",
       name: "Rent Payment",
       category: "Housing",
-      amount: -1500,
+      amount: 1500,
       date: "2024-06-10",
+      type: "expense",
     },
     {
       id: "3",
       name: "Grocery Store",
       category: "Food",
-      amount: -185,
+      amount: 185,
       date: "2024-06-12",
+      type: "expense",
     },
     {
       id: "4",
       name: "Netflix Subscription",
       category: "Entertainment",
-      amount: -16,
+      amount: 16,
       date: "2024-06-05",
+      type: "expense",
     },
     {
       id: "6",
       name: "Electricity Bill",
       category: "Utilities",
-      amount: -120,
+      amount: 120,
       date: "2024-06-08",
+      type: "expense",
     },
     {
       id: "7",
       name: "Gas",
       category: "Transportation",
-      amount: -85,
+      amount: 85,
       date: "2024-06-03",
+      type: "expense",
     },
     {
       id: "8",
       name: "Restaurant",
       category: "Food",
-      amount: -65,
+      amount: 65,
       date: "2024-06-18",
-    },
-    {
-      id: "5",
-      name: "Investment Transfer",
-      category: "Savings",
-      amount: -1200,
-      date: "2024-06-01",
+      type: "expense",
     },
   ]);
 
-  // Monthly Income - Separate from transactions
+  // Monthly Income - SEPARATE from transactions
   const [monthlyIncome, setMonthlyIncome] = useState(6000);
 
+  // New transaction form state
   const [newTransaction, setNewTransaction] = useState({
     name: "",
     category: "Housing",
     amount: 0,
   });
 
-  // Interactive States
+  // UI States
   const [timeRange, setTimeRange] = useState<TimeRange>("6M");
   const [showAIModeler, setShowAIModeler] = useState(false);
   const [simulatedSavingsGoal, setSimulatedSavingsGoal] = useState(0);
   const [marketData, setMarketData] = useState<any[]>([]);
   const [isLoadingMarket, setIsLoadingMarket] = useState(true);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const transactionFormRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setIsClient(true);
@@ -201,14 +206,12 @@ export default function MergedFinancialDashboard() {
     }
   };
 
-  // Calculate metrics from transactions
-  // All transactions here are EXPENSES (negative amounts)
+  // Calculate metrics - EXPENSES ONLY
   const totalExpenses = useMemo(
-    () => Math.abs(transactions.reduce((sum, t) => sum + t.amount, 0)),
+    () => transactions.reduce((sum, t) => sum + t.amount, 0),
     [transactions]
   );
 
-  // Monthly income is separate
   const totalMonthlyIncome = monthlyIncome;
 
   const netCashFlow = useMemo(
@@ -221,7 +224,7 @@ export default function MergedFinancialDashboard() {
     [initialInvestment, netCashFlow]
   );
 
-  // Calculate monthly averages
+  // Monthly averages
   const avgMonthlySpending = useMemo(() => {
     if (transactions.length === 0) return 0;
     return totalExpenses / transactions.length;
@@ -244,13 +247,13 @@ export default function MergedFinancialDashboard() {
       ? ((balanceChange / previousBalance) * 100).toFixed(1)
       : "0";
 
-  // Generate monthly net worth trend
+  // Monthly trend data
   const monthlyTrendData = useMemo(() => {
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
     let balance = initialInvestment;
     const monthlyNetFlow = netCashFlow / months.length;
 
-    return months.map((month, index) => {
+    return months.map((month) => {
       balance += monthlyNetFlow;
       return {
         month,
@@ -270,13 +273,8 @@ export default function MergedFinancialDashboard() {
     return data;
   }, [currentBalance, annualReturn, years]);
 
-  // Calculate investment growth
-  const investmentGrowthAmount = useMemo(() => {
-    return compoundData[1]?.amount - currentBalance || 0;
-  }, [compoundData, currentBalance]);
-
   const investmentTarget = useMemo(() => {
-    return Math.round(currentBalance * 1.25); // 25% growth target
+    return Math.round(currentBalance * 1.25);
   }, [currentBalance]);
 
   // Cash Flow Projection
@@ -313,7 +311,6 @@ export default function MergedFinancialDashboard() {
   const insights = useMemo(() => {
     const list = [];
 
-    // Spending Alert
     if (totalMonthlyIncome === 0) {
       list.push({
         title: "No Income Recorded",
@@ -332,19 +329,18 @@ export default function MergedFinancialDashboard() {
       list.push({
         title: "Spending Alert",
         type: "warning",
-        msg: `Consider reducing spending to increase savings rate.`,
+        msg: "Consider reducing spending to increase savings rate.",
         val: `${Math.round(spendingPercentOfIncome)}%`,
       });
     } else {
       list.push({
         title: "Healthy Spending",
         type: "success",
-        msg: `You're maintaining a good spending balance.`,
+        msg: "You're maintaining a good spending balance.",
         val: `${Math.round(spendingPercentOfIncome)}%`,
       });
     }
 
-    // Savings Rate
     if (savingsRate >= 20) {
       list.push({
         title: "Healthy Savings Rate",
@@ -368,7 +364,6 @@ export default function MergedFinancialDashboard() {
       });
     }
 
-    // Millionaire Milestone
     const yearsToMillion =
       monthlySavings > 0
         ? (1000000 - currentBalance) / (monthlySavings * 12)
@@ -383,7 +378,6 @@ export default function MergedFinancialDashboard() {
       });
     }
 
-    // Wealth Projection
     const projectedGain = compoundData[years]?.amount - currentBalance || 0;
     list.push({
       title: "Wealth Projection",
@@ -404,12 +398,11 @@ export default function MergedFinancialDashboard() {
     totalMonthlyIncome,
   ]);
 
-  // Add transaction handler
+  // Add transaction handler - ONLY expenses
   const handleAddTransaction = () => {
     if (!newTransaction.name || newTransaction.amount === 0) return;
 
     const id = Date.now().toString();
-    const amount = -Math.abs(newTransaction.amount); // Always negative for expenses
 
     setTransactions([
       ...transactions,
@@ -417,8 +410,9 @@ export default function MergedFinancialDashboard() {
         id,
         name: newTransaction.name,
         category: newTransaction.category,
-        amount,
+        amount: Math.abs(newTransaction.amount),
         date: new Date().toISOString().split("T")[0],
+        type: "expense",
       },
     ]);
 
@@ -428,6 +422,57 @@ export default function MergedFinancialDashboard() {
   // Delete transaction handler
   const handleDeleteTransaction = (id: string) => {
     setTransactions(transactions.filter((t) => t.id !== id));
+  };
+
+  // Export Report as CSV
+  const handleExportReport = () => {
+    const reportData = [
+      ["FinSight Financial Report"],
+      ["Generated:", new Date().toLocaleDateString()],
+      [],
+      ["SUMMARY"],
+      ["Monthly Income", `$${totalMonthlyIncome.toLocaleString()}`],
+      ["Total Expenses", `$${totalExpenses.toLocaleString()}`],
+      ["Monthly Savings", `$${netCashFlow.toLocaleString()}`],
+      ["Savings Rate", `${savingsRate.toFixed(1)}%`],
+      ["Current Balance", `$${currentBalance.toLocaleString()}`],
+      [],
+      ["EXPENSES BREAKDOWN"],
+      ["Description", "Category", "Amount", "Date"],
+      ...transactions.map((t) => [
+        t.name,
+        t.category,
+        `$${t.amount.toLocaleString()}`,
+        t.date,
+      ]),
+      [],
+      ["PROJECTIONS"],
+      ["Initial Investment", `$${initialInvestment.toLocaleString()}`],
+      ["Annual Return", `${annualReturn}%`],
+      ["Projected Value (1 Year)", `$${compoundData[1]?.amount.toLocaleString()}`],
+      ["Projected Value (5 Years)", `$${compoundData[5]?.amount.toLocaleString()}`],
+      ["Projected Value (10 Years)", `$${compoundData[10]?.amount.toLocaleString()}`],
+    ];
+
+    const csvContent = reportData
+      .map((row) => row.map((cell) => `"${cell}"`).join(","))
+      .join("\n");
+
+    const element = document.createElement("a");
+    element.setAttribute(
+      "href",
+      "data:text/csv;charset=utf-8," + encodeURIComponent(csvContent)
+    );
+    element.setAttribute("download", "finsight-report.csv");
+    element.style.display = "none";
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+  };
+
+  // Scroll to transaction form
+  const handleAddTransactionClick = () => {
+    transactionFormRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   const containerVariants = {
@@ -980,14 +1025,17 @@ export default function MergedFinancialDashboard() {
           </aside>
         </div>
 
-        {/* Recent Transactions - EXPENSES ONLY */}
+        {/* Recent Expenses - ONLY EXPENSES */}
         <motion.div
           variants={itemVariants}
           initial="hidden"
           animate="visible"
           className="grid gap-8 lg:grid-cols-3"
         >
-          <div className="lg:col-span-2 rounded-xl bg-gradient-to-br from-slate-800/50 to-slate-900/50 border border-slate-700/50 p-8 backdrop-blur-md">
+          <div
+            ref={transactionFormRef}
+            className="lg:col-span-2 rounded-xl bg-gradient-to-br from-slate-800/50 to-slate-900/50 border border-slate-700/50 p-8 backdrop-blur-md"
+          >
             <h2 className="text-2xl font-bold text-white mb-6">
               Recent Expenses
             </h2>
@@ -1025,7 +1073,6 @@ export default function MergedFinancialDashboard() {
                   <option value="Transportation">Transportation</option>
                   <option value="Entertainment">Entertainment</option>
                   <option value="Utilities">Utilities</option>
-                  <option value="Savings">Savings</option>
                   <option value="Healthcare">Healthcare</option>
                   <option value="Other">Other</option>
                 </select>
@@ -1052,7 +1099,7 @@ export default function MergedFinancialDashboard() {
               </div>
             </div>
 
-            {/* Transaction List */}
+            {/* Expense List */}
             <div className="space-y-4 max-h-[400px] overflow-y-auto">
               {transactions.length === 0 ? (
                 <p className="text-slate-400 text-center py-8">
@@ -1079,7 +1126,7 @@ export default function MergedFinancialDashboard() {
                     <div className="flex items-center gap-4">
                       <div className="text-right">
                         <p className="font-bold text-red-400">
-                          -${Math.abs(tx.amount).toLocaleString()}
+                          -${tx.amount.toLocaleString()}
                         </p>
                         <p className="text-xs text-slate-500">{tx.date}</p>
                       </div>
@@ -1098,10 +1145,11 @@ export default function MergedFinancialDashboard() {
             </div>
           </div>
 
-          {/* Quick Actions */}
+          {/* Quick Actions - FULLY FUNCTIONAL */}
           <div className="rounded-xl bg-gradient-to-br from-slate-800/50 to-slate-900/50 border border-slate-700/50 p-8 backdrop-blur-md h-fit">
             <h2 className="text-2xl font-bold text-white mb-6">Quick Actions</h2>
             <div className="space-y-3">
+              {/* Learn Button - Navigate to /learn */}
               <Link href="/learn">
                 <motion.button
                   whileHover={{ scale: 1.02 }}
@@ -1113,27 +1161,33 @@ export default function MergedFinancialDashboard() {
                 </motion.button>
               </Link>
 
+              {/* Add Transaction Button - Scroll to form */}
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
+                onClick={handleAddTransactionClick}
                 className="w-full flex items-center justify-between p-4 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 hover:border-amber-500/50 transition-colors text-white font-semibold group"
               >
-                <span>💰 Add Expense</span>
+                <span>💰 Add Transaction</span>
                 <ArrowUpRight className="h-4 w-4 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
               </motion.button>
 
+              {/* Export Report Button - Download CSV */}
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
+                onClick={handleExportReport}
                 className="w-full flex items-center justify-between p-4 rounded-lg bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 hover:border-purple-500/50 transition-colors text-white font-semibold group"
               >
                 <span>📊 Export Report</span>
-                <ArrowUpRight className="h-4 w-4 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                <Download className="h-4 w-4 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
               </motion.button>
 
+              {/* Settings Button - Open settings modal */}
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
+                onClick={() => setShowSettingsModal(true)}
                 className="w-full flex items-center justify-between p-4 rounded-lg bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/30 hover:border-emerald-500/50 transition-colors text-white font-semibold group"
               >
                 <span>⚙️ Settings</span>
@@ -1142,6 +1196,98 @@ export default function MergedFinancialDashboard() {
             </div>
           </div>
         </motion.div>
+
+        {/* Settings Modal */}
+        <AnimatePresence>
+          {showSettingsModal && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-2xl p-8 max-w-md w-full shadow-2xl"
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-white">Settings</h2>
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => setShowSettingsModal(false)}
+                    className="p-2 hover:bg-slate-800 rounded-lg transition-colors"
+                  >
+                    <X className="h-5 w-5 text-slate-400" />
+                  </motion.button>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="p-4 rounded-lg bg-slate-900/50 border border-slate-700/30">
+                    <h3 className="text-sm font-bold text-cyan-400 mb-4">
+                      Dashboard Settings
+                    </h3>
+
+                    <div className="space-y-3">
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={showBalance}
+                          onChange={(e) => setShowBalance(e.target.checked)}
+                          className="w-4 h-4 rounded border-slate-600 text-cyan-500 focus:ring-cyan-500"
+                        />
+                        <span className="text-sm text-slate-300">
+                          Show balance in card
+                        </span>
+                      </label>
+
+                      <div className="pt-4 border-t border-slate-700">
+                        <p className="text-xs font-bold text-slate-500 mb-2 uppercase">
+                          Default Return Rate
+                        </p>
+                        <Slider
+                          label=""
+                          val={annualReturn}
+                          sym="%"
+                          min={1}
+                          max={15}
+                          step={0.5}
+                          onChange={setAnnualReturn}
+                        />
+                      </div>
+
+                      <div className="pt-4 border-t border-slate-700">
+                        <p className="text-xs font-bold text-slate-500 mb-2 uppercase">
+                          Projection Years
+                        </p>
+                        <Slider
+                          label=""
+                          val={years}
+                          sym=""
+                          min={5}
+                          max={50}
+                          step={1}
+                          onChange={setYears}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowSettingsModal(false)}
+                    className="w-full py-3 rounded-lg bg-gradient-to-r from-cyan-500 to-emerald-500 text-white font-bold hover:shadow-lg hover:shadow-cyan-500/30 transition-all"
+                  >
+                    Save Settings
+                  </motion.button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Bottom CTA Section */}
         <motion.div
@@ -1200,12 +1346,14 @@ function Slider({
 }) {
   return (
     <div className="space-y-3">
-      <div className="flex justify-between text-sm font-bold">
-        <span className="text-slate-400">{label}</span>
-        <span className="text-white">
-          {sym === "$" ? `$${val.toLocaleString()}` : `${val}${sym}`}
-        </span>
-      </div>
+      {label && (
+        <div className="flex justify-between text-sm font-bold">
+          <span className="text-slate-400">{label}</span>
+          <span className="text-white">
+            {sym === "$" ? `$${val.toLocaleString()}` : `${val}${sym}`}
+          </span>
+        </div>
+      )}
       <input
         type="range"
         min={min}
