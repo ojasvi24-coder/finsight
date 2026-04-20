@@ -22,6 +22,8 @@ import {
   Filter,
   ExternalLink,
   Globe,
+  Trash2,
+  Plus,
 } from "lucide-react";
 import {
   LineChart,
@@ -38,85 +40,88 @@ import {
 
 type TimeRange = "3M" | "6M" | "12M";
 
-// Mock data
-const monthlyTrends = [
-  { month: "Jan", balance: 45000, spending: 3500 },
-  { month: "Feb", balance: 47000, spending: 3600 },
-  { month: "Mar", balance: 49000, spending: 3400 },
-  { month: "Apr", balance: 50500, spending: 3700 },
-  { month: "May", balance: 51200, spending: 3500 },
-  { month: "Jun", balance: 52400, spending: 3600 },
-];
-
-const recentTransactions = [
-  {
-    id: 1,
-    name: "Salary Deposit",
-    category: "Income",
-    amount: 6000,
-    date: "2024-06-15",
-  },
-  {
-    id: 2,
-    name: "Rent Payment",
-    category: "Housing",
-    amount: -1500,
-    date: "2024-06-10",
-  },
-  {
-    id: 3,
-    name: "Grocery Store",
-    category: "Food",
-    amount: -185,
-    date: "2024-06-12",
-  },
-  {
-    id: 4,
-    name: "Netflix Subscription",
-    category: "Entertainment",
-    amount: -16,
-    date: "2024-06-05",
-  },
-  {
-    id: 5,
-    name: "Investment Transfer",
-    category: "Savings",
-    amount: 1200,
-    date: "2024-06-01",
-  },
-];
-
-const aiInsights = [
-  {
-    title: "Strong Growth Trajectory",
-    description:
-      "Your net worth has grown 6.7% in the last 6 months. Maintain this momentum.",
-    type: "success",
-  },
-  {
-    title: "Optimize Spending",
-    description:
-      "Consider reviewing subscriptions and recurring charges to boost savings rate.",
-    type: "warning",
-  },
-  {
-    title: "Investment Opportunity",
-    description:
-      "With your current savings rate, you could reach your $100k target in 18 months.",
-    type: "info",
-  },
-];
+interface Transaction {
+  id: string;
+  name: string;
+  category: string;
+  amount: number;
+  date: string;
+}
 
 export default function MergedFinancialDashboard() {
   const [showBalance, setShowBalance] = useState(true);
   const [isClient, setIsClient] = useState(false);
 
   // Simulation States
-  const [income, setIncome] = useState(6000);
-  const [expenses, setExpenses] = useState(4200);
-  const [initialInvestment, setInitialInvestment] = useState(52400);
+  const [initialInvestment, setInitialInvestment] = useState(50000);
   const [annualReturn, setAnnualReturn] = useState(8);
   const [years, setYears] = useState(30);
+
+  // Transaction Management
+  const [transactions, setTransactions] = useState<Transaction[]>([
+    {
+      id: "1",
+      name: "Salary Deposit",
+      category: "Income",
+      amount: 6000,
+      date: "2024-06-15",
+    },
+    {
+      id: "2",
+      name: "Rent Payment",
+      category: "Housing",
+      amount: -1500,
+      date: "2024-06-10",
+    },
+    {
+      id: "3",
+      name: "Grocery Store",
+      category: "Food",
+      amount: -185,
+      date: "2024-06-12",
+    },
+    {
+      id: "4",
+      name: "Netflix Subscription",
+      category: "Entertainment",
+      amount: -16,
+      date: "2024-06-05",
+    },
+    {
+      id: "5",
+      name: "Investment Transfer",
+      category: "Savings",
+      amount: 1200,
+      date: "2024-06-01",
+    },
+    {
+      id: "6",
+      name: "Electricity Bill",
+      category: "Utilities",
+      amount: -120,
+      date: "2024-06-08",
+    },
+    {
+      id: "7",
+      name: "Gas",
+      category: "Transportation",
+      amount: -85,
+      date: "2024-06-03",
+    },
+    {
+      id: "8",
+      name: "Restaurant",
+      category: "Food",
+      amount: -65,
+      date: "2024-06-18",
+    },
+  ]);
+
+  const [newTransaction, setNewTransaction] = useState({
+    name: "",
+    category: "Expense",
+    amount: 0,
+  });
 
   // Interactive States
   const [timeRange, setTimeRange] = useState<TimeRange>("6M");
@@ -200,29 +205,77 @@ export default function MergedFinancialDashboard() {
     }
   };
 
-  // Calculate key metrics
-  const currentBalance = initialInvestment;
-  const previousBalance = monthlyTrends[monthlyTrends.length - 2]?.balance || 49000;
+  // Calculate metrics from transactions
+  const incomeTransactions = useMemo(
+    () => transactions.filter((t) => t.amount > 0),
+    [transactions]
+  );
+
+  const expenseTransactions = useMemo(
+    () => transactions.filter((t) => t.amount < 0),
+    [transactions]
+  );
+
+  const totalIncome = useMemo(
+    () => incomeTransactions.reduce((sum, t) => sum + t.amount, 0),
+    [incomeTransactions]
+  );
+
+  const totalExpenses = useMemo(
+    () => Math.abs(expenseTransactions.reduce((sum, t) => sum + t.amount, 0)),
+    [expenseTransactions]
+  );
+
+  const netCashFlow = useMemo(() => totalIncome - totalExpenses, [totalIncome, totalExpenses]);
+
+  const currentBalance = useMemo(
+    () => initialInvestment + netCashFlow,
+    [initialInvestment, netCashFlow]
+  );
+
+  const avgMonthlySpending = useMemo(() => {
+    if (incomeTransactions.length === 0) return 0;
+    return totalExpenses / incomeTransactions.length;
+  }, [totalExpenses, incomeTransactions]);
+
+  const savingsRate = useMemo(() => {
+    if (totalIncome === 0) return 0;
+    return ((netCashFlow / totalIncome) * 100);
+  }, [netCashFlow, totalIncome]);
+
+  const previousBalance = initialInvestment;
   const balanceChange = currentBalance - previousBalance;
-  const balanceChangePercent = ((balanceChange / previousBalance) * 100).toFixed(1);
+  const balanceChangePercent = previousBalance > 0 ? ((balanceChange / previousBalance) * 100).toFixed(1) : "0";
 
-  const totalSpending = monthlyTrends.reduce((sum, month) => sum + month.spending, 0);
-  const avgMonthlySpending = (totalSpending / monthlyTrends.length).toFixed(0);
+  // Generate monthly net worth trend
+  const monthlyTrendData = useMemo(() => {
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
+    let balance = initialInvestment;
+    const monthlyNetFlow = netCashFlow / months.length;
 
-  const monthlySavings = income - expenses;
-  const savingsRate = income > 0 ? (monthlySavings / income) * 100 : 0;
+    return months.map((month, index) => {
+      balance += monthlyNetFlow;
+      return {
+        month,
+        balance: Math.round(balance),
+        spending: Math.round(totalExpenses / months.length),
+      };
+    });
+  }, [initialInvestment, netCashFlow, totalExpenses]);
 
   // Compound Interest Calculation
   const compoundData = useMemo(() => {
     const data = [];
     for (let year = 0; year <= years; year++) {
-      const amount = initialInvestment * Math.pow(1 + annualReturn / 100, year);
+      const amount = currentBalance * Math.pow(1 + annualReturn / 100, year);
       data.push({ year, amount: Math.round(amount) });
     }
     return data;
-  }, [initialInvestment, annualReturn, years]);
+  }, [currentBalance, annualReturn, years]);
 
   // Cash Flow Projection
+  const monthlySavings = netCashFlow / (incomeTransactions.length || 1);
+
   interface ProjectionPoint {
     month: string;
     balance: number;
@@ -231,8 +284,8 @@ export default function MergedFinancialDashboard() {
 
   const projectionData = useMemo(() => {
     const monthsCount = timeRange === "3M" ? 3 : timeRange === "6M" ? 6 : 12;
-    let base = initialInvestment;
-    let opt = initialInvestment;
+    let base = currentBalance;
+    let opt = currentBalance;
 
     return Array.from({ length: monthsCount + 1 }).map((_, i): ProjectionPoint => {
       const point: ProjectionPoint = {
@@ -248,11 +301,12 @@ export default function MergedFinancialDashboard() {
       opt += monthlySavings + simulatedSavingsGoal;
       return point;
     });
-  }, [initialInvestment, monthlySavings, simulatedSavingsGoal, timeRange, showAIModeler]);
+  }, [currentBalance, monthlySavings, simulatedSavingsGoal, timeRange, showAIModeler]);
 
   // AI Insights
   const insights = useMemo(() => {
     const list = [];
+
     if (savingsRate >= 20) {
       list.push({
         title: "Healthy Savings Rate",
@@ -260,20 +314,28 @@ export default function MergedFinancialDashboard() {
         msg: "You're hitting the 20% golden rule.",
         val: `${savingsRate.toFixed(1)}%`,
       });
-    } else {
+    } else if (savingsRate > 0) {
       list.push({
         title: "Savings Alert",
         type: "warning",
         msg: "Try to reduce expenses to hit 20% savings.",
         val: `${savingsRate.toFixed(1)}%`,
       });
+    } else {
+      list.push({
+        title: "Spending Alert",
+        type: "warning",
+        msg: "Expenses exceed income. Time to adjust.",
+        val: `${savingsRate.toFixed(1)}%`,
+      });
     }
 
     const yearsToMillion =
       monthlySavings > 0
-        ? (1000000 - initialInvestment) / (monthlySavings * 12)
+        ? (1000000 - currentBalance) / (monthlySavings * 12)
         : Infinity;
-    if (yearsToMillion < 50) {
+
+    if (yearsToMillion < 50 && yearsToMillion > 0) {
       list.push({
         title: "Millionaire Milestone",
         type: "info",
@@ -282,8 +344,45 @@ export default function MergedFinancialDashboard() {
       });
     }
 
+    const projectedGain = compoundData[years]?.amount - currentBalance || 0;
+    list.push({
+      title: "Wealth Projection",
+      type: "info",
+      msg: `With ${annualReturn}% annual return, gain $${Math.abs(projectedGain).toLocaleString()} in ${years} years.`,
+      val: `+${annualReturn}%`,
+    });
+
     return list;
-  }, [savingsRate, monthlySavings, initialInvestment]);
+  }, [savingsRate, monthlySavings, currentBalance, years, annualReturn, compoundData]);
+
+  // Add transaction handler
+  const handleAddTransaction = () => {
+    if (!newTransaction.name || newTransaction.amount === 0) return;
+
+    const id = Date.now().toString();
+    const amount =
+      newTransaction.category === "Income"
+        ? Math.abs(newTransaction.amount)
+        : -Math.abs(newTransaction.amount);
+
+    setTransactions([
+      ...transactions,
+      {
+        id,
+        name: newTransaction.name,
+        category: newTransaction.category,
+        amount,
+        date: new Date().toISOString().split("T")[0],
+      },
+    ]);
+
+    setNewTransaction({ name: "", category: "Expense", amount: 0 });
+  };
+
+  // Delete transaction handler
+  const handleDeleteTransaction = (id: string) => {
+    setTransactions(transactions.filter((t) => t.id !== id));
+  };
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -434,7 +533,7 @@ export default function MergedFinancialDashboard() {
             </div>
           </motion.div>
 
-          {/* Monthly Savings */}
+          {/* Monthly Spending */}
           <motion.div
             variants={itemVariants}
             className="rounded-xl bg-gradient-to-br from-slate-800/50 to-slate-900/50 border border-slate-700/50 p-6 backdrop-blur-md hover:border-emerald-500/30 transition-all"
@@ -446,10 +545,10 @@ export default function MergedFinancialDashboard() {
             </div>
             <p className="text-sm text-slate-400 mb-2">Avg Monthly Spending</p>
             <p className="text-3xl font-black text-white mb-2">
-              ${parseInt(avgMonthlySpending).toLocaleString()}
+              ${Math.round(avgMonthlySpending).toLocaleString()}
             </p>
             <p className="text-slate-500 text-sm">
-              {((3200 / 5500) * 100).toFixed(0)}% of income
+              {totalIncome > 0 ? Math.round((avgMonthlySpending / totalIncome) * 100) : 0}% of income
             </p>
           </motion.div>
 
@@ -467,7 +566,7 @@ export default function MergedFinancialDashboard() {
             <p className="text-3xl font-black text-white mb-2">
               {savingsRate.toFixed(0)}%
             </p>
-            <p className="text-emerald-400 text-sm font-semibold">
+            <p className={`text-sm font-semibold ${savingsRate >= 20 ? 'text-emerald-400' : 'text-amber-400'}`}>
               {savingsRate >= 20 ? "✓ Above 20% target" : "📈 Boost to 20%"}
             </p>
           </motion.div>
@@ -483,9 +582,9 @@ export default function MergedFinancialDashboard() {
               </div>
             </div>
             <p className="text-sm text-slate-400 mb-2">Investment Growth</p>
-            <p className="text-3xl font-black text-white mb-2">+12% YTD</p>
+            <p className="text-3xl font-black text-white mb-2">+{annualReturn}% YTD</p>
             <p className="text-slate-500 text-sm">
-              $49,000 → $62,000 target
+              ${currentBalance.toLocaleString()} → ${Math.round(currentBalance * (1 + annualReturn / 100)).toLocaleString()} target
             </p>
           </motion.div>
         </motion.div>
@@ -507,7 +606,7 @@ export default function MergedFinancialDashboard() {
               </div>
               <div className="h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={monthlyTrends}>
+                  <LineChart data={monthlyTrendData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                     <XAxis dataKey="month" stroke="#475569" />
                     <YAxis stroke="#475569" tickFormatter={(v) => `$${v / 1000}k`} />
@@ -715,23 +814,12 @@ export default function MergedFinancialDashboard() {
               <div className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-slate-500 uppercase">
-                    Monthly Income
+                    Initial Investment
                   </label>
                   <input
                     type="number"
-                    value={income}
-                    onChange={(e) => setIncome(Number(e.target.value))}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-cyan-500 outline-none transition-colors"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-500 uppercase">
-                    Monthly Expenses
-                  </label>
-                  <input
-                    type="number"
-                    value={expenses}
-                    onChange={(e) => setExpenses(Number(e.target.value))}
+                    value={initialInvestment}
+                    onChange={(e) => setInitialInvestment(Number(e.target.value))}
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-cyan-500 outline-none transition-colors"
                   />
                 </div>
@@ -760,7 +848,7 @@ export default function MergedFinancialDashboard() {
                 <Lightbulb className="h-12 w-12" />
               </div>
               <h3 className="text-lg font-bold mb-6 text-cyan-400">AI Intelligence</h3>
-              <div className="space-y-4">
+              <div className="space-y-4 max-h-[400px] overflow-y-auto">
                 {insights.map((insight, i) => (
                   <motion.div
                     key={i}
@@ -800,44 +888,118 @@ export default function MergedFinancialDashboard() {
           variants={itemVariants}
           initial="hidden"
           animate="visible"
-          className="grid gap-8 lg:grid-cols-3 mb-12"
+          className="grid gap-8 lg:grid-cols-3"
         >
           <div className="lg:col-span-2 rounded-xl bg-gradient-to-br from-slate-800/50 to-slate-900/50 border border-slate-700/50 p-8 backdrop-blur-md">
             <h2 className="text-2xl font-bold text-white mb-6">Recent Transactions</h2>
-            <div className="space-y-4">
-              {recentTransactions.map((tx) => (
-                <motion.div
-                  key={tx.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  className="flex items-center justify-between p-4 rounded-lg bg-slate-900/50 border border-slate-700/30 hover:border-slate-600/50 transition-colors"
+
+            {/* Add Transaction Form */}
+            <div className="mb-8 p-4 rounded-lg bg-slate-900/50 border border-slate-700/30">
+              <h3 className="text-sm font-bold text-cyan-400 mb-4 flex items-center gap-2">
+                <Plus className="h-4 w-4" /> Add New Transaction
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <input
+                  type="text"
+                  placeholder="Description"
+                  value={newTransaction.name}
+                  onChange={(e) =>
+                    setNewTransaction({ ...newTransaction, name: e.target.value })
+                  }
+                  className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-cyan-500 outline-none transition-colors"
+                />
+                <select
+                  value={newTransaction.category}
+                  onChange={(e) =>
+                    setNewTransaction({
+                      ...newTransaction,
+                      category: e.target.value,
+                    })
+                  }
+                  className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-cyan-500 outline-none transition-colors"
                 >
-                  <div className="flex items-center gap-4 flex-1">
-                    <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-cyan-500/20 to-emerald-500/20 flex items-center justify-center border border-slate-700/50">
-                      {tx.amount > 0 ? (
-                        <ArrowDownRight className="h-5 w-5 text-emerald-400" />
-                      ) : (
-                        <ArrowUpRight className="h-5 w-5 text-red-400" />
-                      )}
+                  <option value="Income">Income</option>
+                  <option value="Housing">Housing</option>
+                  <option value="Food">Food</option>
+                  <option value="Transportation">Transportation</option>
+                  <option value="Entertainment">Entertainment</option>
+                  <option value="Utilities">Utilities</option>
+                  <option value="Savings">Savings</option>
+                  <option value="Other">Other</option>
+                </select>
+                <input
+                  type="number"
+                  placeholder="Amount"
+                  value={newTransaction.amount}
+                  onChange={(e) =>
+                    setNewTransaction({
+                      ...newTransaction,
+                      amount: Number(e.target.value),
+                    })
+                  }
+                  className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-cyan-500 outline-none transition-colors"
+                />
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={handleAddTransaction}
+                  className="bg-gradient-to-r from-cyan-500 to-emerald-500 text-white font-bold rounded-lg py-2 text-sm hover:shadow-lg hover:shadow-cyan-500/30 transition-all"
+                >
+                  Add
+                </motion.button>
+              </div>
+            </div>
+
+            {/* Transaction List */}
+            <div className="space-y-4 max-h-[400px] overflow-y-auto">
+              {transactions.length === 0 ? (
+                <p className="text-slate-400 text-center py-8">No transactions yet. Add one to get started!</p>
+              ) : (
+                transactions.map((tx) => (
+                  <motion.div
+                    key={tx.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 20 }}
+                    className="flex items-center justify-between p-4 rounded-lg bg-slate-900/50 border border-slate-700/30 hover:border-slate-600/50 transition-colors group"
+                  >
+                    <div className="flex items-center gap-4 flex-1">
+                      <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-cyan-500/20 to-emerald-500/20 flex items-center justify-center border border-slate-700/50">
+                        {tx.amount > 0 ? (
+                          <ArrowDownRight className="h-5 w-5 text-emerald-400" />
+                        ) : (
+                          <ArrowUpRight className="h-5 w-5 text-red-400" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-white">{tx.name}</p>
+                        <p className="text-sm text-slate-400">{tx.category}</p>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-white">{tx.name}</p>
-                      <p className="text-sm text-slate-400">{tx.category}</p>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <p
+                          className={`font-bold ${
+                            tx.amount > 0 ? "text-emerald-400" : "text-red-400"
+                          }`}
+                        >
+                          {tx.amount > 0 ? "+" : ""}
+                          ${Math.abs(tx.amount).toLocaleString()}
+                        </p>
+                        <p className="text-xs text-slate-500">{tx.date}</p>
+                      </div>
+                      <motion.button
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => handleDeleteTransaction(tx.id)}
+                        className="p-2 rounded-lg hover:bg-red-500/20 text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </motion.button>
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <p
-                      className={`font-bold ${
-                        tx.amount > 0 ? "text-emerald-400" : "text-red-400"
-                      }`}
-                    >
-                      {tx.amount > 0 ? "+" : ""}
-                      ${Math.abs(tx.amount).toLocaleString()}
-                    </p>
-                    <p className="text-xs text-slate-500">{tx.date}</p>
-                  </div>
-                </motion.div>
-              ))}
+                  </motion.div>
+                ))
+              )}
             </div>
           </div>
 
@@ -891,7 +1053,7 @@ export default function MergedFinancialDashboard() {
           initial={{ opacity: 0, y: 40 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.6 }}
-          className="rounded-xl bg-gradient-to-r from-cyan-600/20 to-emerald-600/20 border border-cyan-500/30 p-8 text-center backdrop-blur-md"
+          className="rounded-xl bg-gradient-to-r from-cyan-600/20 to-emerald-600/20 border border-cyan-500/30 p-8 text-center backdrop-blur-md mt-12"
         >
           <h3 className="text-2xl sm:text-3xl font-bold text-white mb-3">
             Master Your Finances
@@ -960,4 +1122,3 @@ function Slider({
     </div>
   );
 }
-
