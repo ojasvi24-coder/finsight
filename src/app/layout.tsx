@@ -13,6 +13,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+
 export const metadata: Metadata = {
   title: "FinSight - AI-Powered Financial Intelligence",
   description: "Take control of your wealth with real-time insights, personalized recommendations, and data-driven financial strategies. Unlike standard banking apps that only track where your money went, FinSight uses behavioral analytics to predict where your wealth could be, offering actionable AI-driven strategies to bridge the gap.",
