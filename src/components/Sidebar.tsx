@@ -2,10 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, BarChart3, BookOpen, LogOut } from "lucide-react";
+import { Home, BarChart3, BookOpen, LogOut, X } from "lucide-react";
 import { motion } from "framer-motion";
 
-export default function Sidebar() {
+interface SidebarProps {
+  onNavigate?: () => void;
+}
+
+export default function Sidebar({ onNavigate }: SidebarProps) {
   const pathname = usePathname();
 
   const menuItems = [
@@ -14,15 +18,29 @@ export default function Sidebar() {
     { name: "Learning Hub", path: "/learn", icon: BookOpen },
   ];
 
+  // Helper to handle link clicks
+  const handleLinkClick = () => {
+    if (onNavigate) {
+      onNavigate();
+    }
+  };
+
   return (
-    <aside className="fixed left-0 top-0 h-screen w-64 bg-slate-950/80 backdrop-blur-xl border-r border-slate-800 p-6 flex flex-col justify-between z-50">
+    <aside className="h-screen w-64 bg-slate-950/80 backdrop-blur-xl border-r border-slate-800 p-6 flex flex-col justify-between relative">
       {/* Top Section: Logo & Links */}
       <div>
-        {/* App Logo/Brand */}
-        <div className="mb-10 pl-2">
+        {/* App Logo/Brand & Close button for mobile */}
+        <div className="mb-10 pl-2 flex items-center justify-between">
           <h2 className="text-2xl font-black bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent">
             FinSight
           </h2>
+          {/* Mobile-only close button if you want it inside the sidebar too */}
+          <button 
+            onClick={handleLinkClick} 
+            className="lg:hidden p-1 text-slate-400 hover:text-white"
+          >
+            <X size={20} />
+          </button>
         </div>
 
         {/* Navigation Links */}
@@ -32,7 +50,11 @@ export default function Sidebar() {
             const Icon = item.icon;
 
             return (
-              <Link key={item.name} href={item.path}>
+              <Link 
+                key={item.name} 
+                href={item.path}
+                onClick={handleLinkClick}
+              >
                 <motion.div
                   whileHover={{ x: 5 }}
                   whileTap={{ scale: 0.95 }}
@@ -54,7 +76,7 @@ export default function Sidebar() {
       {/* Bottom Section: Exit/Logout Button */}
       <div>
         <button 
-          onClick={() => alert("Add your logout logic here!")}
+          onClick={() => alert("Logging out...")}
           className="w-full flex items-center gap-4 px-4 py-3 rounded-xl text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors border border-transparent hover:border-red-500/20 group"
         >
           <LogOut className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />

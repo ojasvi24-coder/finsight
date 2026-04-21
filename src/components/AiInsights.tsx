@@ -1,8 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertCircle, TrendingUp, Zap, Info, ChevronDown } from "lucide-react";
+import { 
+  Sparkles, 
+  TrendingUp, 
+  AlertCircle, 
+  ArrowUpRight, 
+  ChevronDown, 
+  ChevronUp,
+  Info,
+  Lightbulb,
+  ShieldCheck,
+  Zap // Make sure Zap is right here!
+} from "lucide-react";
 
 interface AIInsight {
   id: number;
@@ -163,6 +174,8 @@ export function AIInsights({ insights }: AIInsightsProps) {
         return <Zap className="w-5 h-5" />;
     }
   };
+
+  <Sparkles className="w-6 h-6 text-purple-500 animate-ai-glow" />
 
   const getColors = (type: string, severity?: string) => {
     if (type === "warning") {
