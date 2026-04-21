@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertCircle, TrendingUp, Zap, Info, ChevronDown, X } from "lucide-react";
+import { AlertCircle, TrendingUp, Zap, Info, ChevronDown } from "lucide-react";
 
 interface AIInsight {
   id: number;
@@ -190,7 +190,7 @@ export function AIInsights({ insights }: AIInsightsProps) {
   };
 
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full space-y-6 bg-slate-900/40 border border-slate-800/50 backdrop-blur-lg rounded-xl p-6">
       {/* Header */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -250,9 +250,7 @@ export function AIInsights({ insights }: AIInsightsProps) {
                 >
                   <div className="flex items-start gap-4">
                     {/* Icon */}
-                    <div
-                      className={`mt-1 p-2 rounded-lg ${colors.badge}`}
-                    >
+                    <div className={`mt-1 p-2 rounded-lg ${colors.badge}`}>
                       {getIcon(insight.type)}
                     </div>
 
@@ -381,7 +379,7 @@ export function AIInsights({ insights }: AIInsightsProps) {
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="mt-8 p-4 rounded-xl bg-gradient-to-br from-emerald-500/10 to-cyan-500/10 border border-emerald-500/20"
+        className="mt-4 p-4 rounded-xl bg-gradient-to-br from-emerald-500/10 to-cyan-500/10 border border-emerald-500/20"
       >
         <p className="text-sm text-slate-400 mb-2">
           💡 <span className="font-semibold text-slate-300">Optimization Potential:</span> Following these recommendations could save you <span className="text-emerald-400 font-bold">$8,400+ annually</span> and accelerate wealth accumulation by 2-3 years.
