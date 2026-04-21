@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Sidebar from "@/components/Sidebar";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -12,6 +13,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// Preserved your detailed SEO metadata
 export const metadata: Metadata = {
   title: "FinSight - AI-Powered Financial Intelligence",
   description: "Take control of your wealth with real-time insights, personalized recommendations, and data-driven financial strategies.",
@@ -48,8 +50,17 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-slate-950 text-slate-50 overflow-x-hidden">
-        {children}
+      {/* Updated body to use flex layout for the sidebar */}
+      <body className="min-h-screen flex bg-slate-950 text-slate-50 overflow-x-hidden">
+        
+        {/* 1. The Navigation Sidebar */}
+        <Sidebar />
+
+        {/* 2. Main Content Area (offset by ml-64 to accommodate the sidebar width) */}
+        <main className="flex-1 ml-64 min-h-screen relative">
+          {children}
+        </main>
+
       </body>
     </html>
   );

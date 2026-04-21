@@ -103,7 +103,7 @@ export default function LearnPage() {
   } as const;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50 selection:bg-cyan-500/30">
+    <div className="min-h-screen w-full bg-slate-950 text-slate-50 overflow-hidden flex items-center justify-center">
       {/* Animated background */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <motion.div 
