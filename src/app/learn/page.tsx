@@ -1,10 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { BookOpen, TrendingUp, PiggyBank, Zap, ArrowRight, Search } from "lucide-react";
+import {
+  BookOpen,
+  TrendingUp,
+  PiggyBank,
+  Zap,
+  ArrowRight,
+  Search,
+  CheckCircle2,
+  Circle,
+  Flag,
+  Target,
+  Layers,
+} from "lucide-react";
 
+/* ---------- data ---------- */
 interface Article {
   slug: string;
   title: string;
@@ -13,69 +26,156 @@ interface Article {
   description: string;
 }
 
-// Sample articles data - 6 core courses
 const articles: Article[] = [
   {
     slug: "50-30-20-framework",
     title: "The 50/30/20 Framework",
     category: "Budgeting",
     time: "5 min read",
-    description: "Learn how to allocate your post-tax income into needs, wants, and savings with this proven budgeting framework."
-  },
-  {
-    slug: "index-funds-vs-stocks",
-    title: "Index Funds vs. Individual Stocks",
-    category: "Investing",
-    time: "8 min read",
-    description: "Understand why broad-market index funds historically outperform active day trading through data-driven analysis."
-  },
-  {
-    slug: "the-art-of-asset-allocation",
-    title: "The Art of Asset Allocation",
-    category: "Strategy",
-    time: "7 min read",
-    description: "Master the strategic distribution of investments across different asset classes for optimal returns."
+    description:
+      "Allocate post-tax income into needs, wants, and savings with a proven, automatic budgeting framework.",
   },
   {
     slug: "compound-interest",
     title: "Understanding Compound Interest",
     category: "Wealth",
     time: "4 min read",
-    description: "Discover how compound interest turns consistent small investments into massive capital over decades."
+    description:
+      "How consistent small investments turn into massive capital over decades.",
+  },
+  {
+    slug: "index-funds-vs-stocks",
+    title: "Index Funds vs. Individual Stocks",
+    category: "Investing",
+    time: "8 min read",
+    description:
+      "Why broad-market index funds historically outperform active day trading.",
   },
   {
     slug: "market-history-lessons",
     title: "Market History: Lessons from Crashes",
     category: "Investing",
     time: "6 min read",
-    description: "Learn from historical market crashes and how long-term investors turn volatility into opportunity."
+    description:
+      "Learn from historical crashes — and how long-term investors turn volatility into opportunity.",
+  },
+  {
+    slug: "the-art-of-asset-allocation",
+    title: "The Art of Asset Allocation",
+    category: "Strategy",
+    time: "7 min read",
+    description:
+      "The strategic distribution of investments across asset classes for optimal risk-adjusted returns.",
   },
   {
     slug: "tax-efficient-investing",
     title: "Tax-Efficient Investing Strategies",
     category: "Strategy",
     time: "9 min read",
-    description: "Leverage tax-advantaged accounts and strategies to legally minimize your lifetime tax burden."
-  }
+    description:
+      "Tax-advantaged accounts, asset location, and loss harvesting to minimize your lifetime tax bill.",
+  },
+];
+
+/* ---------- learning tracks ---------- */
+const tracks = [
+  {
+    id: "foundations",
+    title: "Foundations",
+    level: "Beginner",
+    icon: Flag,
+    accent: "from-emerald-500/20 to-emerald-500/0",
+    ring: "border-emerald-500/20",
+    pill: "bg-emerald-500/10 text-emerald-300 border-emerald-500/20",
+    description:
+      "Start here. Build the mental models every investor needs before touching a single stock.",
+    slugs: ["50-30-20-framework", "compound-interest"],
+  },
+  {
+    id: "investing-101",
+    title: "Investing 101",
+    level: "Intermediate",
+    icon: Target,
+    accent: "from-cyan-500/20 to-cyan-500/0",
+    ring: "border-cyan-500/20",
+    pill: "bg-cyan-500/10 text-cyan-300 border-cyan-500/20",
+    description:
+      "Learn what actually drives returns — and why staying calm during a crash is a superpower.",
+    slugs: ["index-funds-vs-stocks", "market-history-lessons"],
+  },
+  {
+    id: "advanced-strategy",
+    title: "Advanced Strategy",
+    level: "Advanced",
+    icon: Layers,
+    accent: "from-amber-500/20 to-amber-500/0",
+    ring: "border-amber-500/20",
+    pill: "bg-amber-500/10 text-amber-300 border-amber-500/20",
+    description:
+      "Optimize. Master asset allocation and tax-efficient structures to keep more of what you earn.",
+    slugs: ["the-art-of-asset-allocation", "tax-efficient-investing"],
+  },
 ];
 
 const categories = ["All", "Budgeting", "Investing", "Wealth", "Strategy"];
 
 const categoryIcons: Record<string, React.ReactNode> = {
-  "Budgeting": <PiggyBank className="w-5 h-5" />,
-  "Investing": <TrendingUp className="w-5 h-5" />,
-  "Wealth": <Zap className="w-5 h-5" />,
-  "Strategy": <BookOpen className="w-5 h-5" />,
+  Budgeting: <PiggyBank className="h-5 w-5" />,
+  Investing: <TrendingUp className="h-5 w-5" />,
+  Wealth: <Zap className="h-5 w-5" />,
+  Strategy: <BookOpen className="h-5 w-5" />,
 };
 
+/* ---------- progress persistence ---------- */
+const STORAGE_KEY = "finsight.learn.completed.v1";
+
+function useCompletion() {
+  const [completed, setCompleted] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    try {
+      const raw =
+        typeof window !== "undefined"
+          ? window.localStorage.getItem(STORAGE_KEY)
+          : null;
+      if (raw) setCompleted(new Set(JSON.parse(raw)));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const toggle = (slug: string) => {
+    setCompleted((prev) => {
+      const next = new Set(prev);
+      if (next.has(slug)) next.delete(slug);
+      else next.add(slug);
+      try {
+        window.localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify(Array.from(next))
+        );
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
+
+  return { completed, toggle };
+}
+
+/* ---------- page ---------- */
 export default function LearnPage() {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
+  const { completed, toggle } = useCompletion();
 
   const filtered = articles.filter((article) => {
-    const matchesCategory = selectedCategory === "All" || article.category === selectedCategory;
-    const matchesSearch = article.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         article.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory =
+      selectedCategory === "All" || article.category === selectedCategory;
+    const matchesSearch =
+      article.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      article.description.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
   });
 
@@ -83,195 +183,325 @@ export default function LearnPage() {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
-      transition: {
-        staggerChildren: 0.12,
-        delayChildren: 0.2,
-      },
+      transition: { staggerChildren: 0.08, delayChildren: 0.1 },
     },
   } as const;
 
   const itemVariants = {
-    hidden: { opacity: 0, y: 40 },
+    hidden: { opacity: 0, y: 20 },
     visible: {
       opacity: 1,
       y: 0,
-      transition: {
-        duration: 0.6,
-        ease: "easeOut",
-      },
+      transition: { duration: 0.45, ease: "easeOut" },
     },
   } as const;
 
+  const bySlug = Object.fromEntries(articles.map((a) => [a.slug, a]));
+
   return (
-    <div className="min-h-screen w-full bg-slate-950 text-slate-50 overflow-hidden flex items-center justify-center">
-      {/* Animated background */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <motion.div 
-          className="absolute -top-1/4 -right-1/4 w-96 h-96 bg-gradient-to-br from-cyan-500/20 to-purple-500/10 rounded-full blur-[120px]"
-          animate={{ y: [0, 30, 0], x: [0, 20, 0] }}
-          transition={{ duration: 8, repeat: Infinity }}
-        />
-        <motion.div 
-          className="absolute top-1/3 -left-1/4 w-96 h-96 bg-gradient-to-br from-emerald-500/20 to-cyan-500/10 rounded-full blur-[120px]"
-          animate={{ y: [0, -30, 0], x: [0, -20, 0] }}
-          transition={{ duration: 10, repeat: Infinity, delay: 1 }}
-        />
+    <div className="min-h-screen bg-slate-950 text-slate-50 selection:bg-emerald-500/30">
+      {/* subtle ambient glow */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(900px_500px_at_20%_0%,rgba(16,185,129,0.05),transparent_60%)]" />
       </div>
 
-      <div className="relative mx-auto max-w-7xl px-6 sm:px-8 py-12 z-10">
-        
+      <div className="relative z-10 mx-auto max-w-7xl px-6 py-10 sm:px-8">
         {/* Header */}
         <motion.header
-          initial={{ opacity: 0, y: -20 }}
+          initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="mb-12"
+          transition={{ duration: 0.45 }}
+          className="mb-10"
         >
-          <h1 className="text-4xl sm:text-5xl font-black text-white mb-4 flex items-center gap-3">
-            <BookOpen className="w-10 h-10 text-cyan-400" />
-            Financial Learning Hub
+          <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
+            Learning Hub
+          </span>
+          <h1 className="mt-1.5 text-3xl font-bold tracking-tight text-white sm:text-4xl">
+            Build wealth knowledge, step by step.
           </h1>
-          <p className="text-lg text-slate-400 max-w-2xl">
-            Master wealth-building strategies with our comprehensive learning materials. From budgeting fundamentals to advanced investment strategies.
+          <p className="mt-2 max-w-2xl text-base text-slate-400">
+            Progressive tracks, bite-sized lessons, and concepts that link
+            directly to the numbers you see in your dashboard.
           </p>
         </motion.header>
 
-        {/* Search and Filters */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.2 }}
-          className="mb-10 space-y-4"
-        >
-          {/* Search Bar */}
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-500" />
-            <input
-              type="text"
-              placeholder="Search courses..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 rounded-lg bg-slate-900/50 border border-slate-700/50 text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none transition-colors"
-            />
-          </div>
-
-          {/* Category Filters */}
-          <div className="flex gap-2 flex-wrap">
-            {categories.map((category) => (
-              <button
-                key={category}
-                onClick={() => setSelectedCategory(category)}
-                className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
-                  selectedCategory === category
-                    ? "bg-cyan-500 text-white shadow-lg shadow-cyan-500/30"
-                    : "bg-slate-800/50 text-slate-400 hover:bg-slate-800 border border-slate-700/30"
-                }`}
-              >
-                {category}
-              </button>
-            ))}
-          </div>
-
-          {/* Results count */}
-          <p className="text-sm text-slate-500">
-            Showing {filtered.length} course{filtered.length !== 1 ? "s" : ""}
-          </p>
-        </motion.div>
-
-        {/* Courses Grid */}
-        <motion.div
+        {/* ---------- LEARNING TRACKS ---------- */}
+        <motion.section
           variants={containerVariants}
           initial="hidden"
           animate="visible"
-          className="grid gap-8 md:grid-cols-2 lg:grid-cols-1"
+          className="mb-14"
         >
-          {filtered.length > 0 ? (
-            filtered.map((article) => (
-              <motion.div
-                key={article.slug}
-                variants={itemVariants}
-                className="group"
-              >
-                <Link href={`/learn/${article.slug}`}>
-                  <motion.div
-                    className="h-full rounded-xl overflow-hidden bg-slate-900/40 border border-slate-800/50 backdrop-blur-md p-6 hover:border-cyan-500/30 transition-all cursor-pointer"
-                    whileHover={{
-                      boxShadow: "0 20px 60px rgba(6, 182, 212, 0.15)",
-                      y: -4,
-                    }}
-                  >
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="p-3 rounded-lg bg-slate-950/50 border border-slate-800 group-hover:border-cyan-500/40 transition-colors">
-                          {categoryIcons[article.category] || <BookOpen className="w-5 h-5 text-cyan-400" />}
-                        </div>
-                        <div>
-                          <span className="text-xs font-bold text-cyan-300 uppercase tracking-widest">
-                            {article.category}
-                          </span>
-                          <span className="text-xs text-slate-500 ml-2">•</span>
-                          <span className="text-xs text-slate-500 ml-2">{article.time}</span>
-                        </div>
+          <div className="mb-5 flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-300">
+              Learning Tracks
+            </h2>
+            <span className="text-xs text-slate-500">
+              {completed.size} of {articles.length} lessons completed
+            </span>
+          </div>
+
+          <div className="grid gap-5 lg:grid-cols-3">
+            {tracks.map((track) => {
+              const completedCount = track.slugs.filter((s) =>
+                completed.has(s)
+              ).length;
+              const total = track.slugs.length;
+              const pct = Math.round((completedCount / total) * 100);
+              const isComplete = completedCount === total;
+              const Icon = track.icon;
+
+              return (
+                <motion.div
+                  key={track.id}
+                  variants={itemVariants}
+                  className={`relative overflow-hidden rounded-2xl border ${track.ring} bg-slate-900/50 p-6 backdrop-blur-sm transition-colors hover:bg-slate-900/80`}
+                >
+                  <div
+                    className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${track.accent}`}
+                  />
+                  <div className="relative">
+                    <div className="mb-4 flex items-start justify-between">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-800 bg-slate-950/60">
+                        <Icon className="h-5 w-5 text-slate-200" />
+                      </div>
+                      <span
+                        className={`rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${track.pill}`}
+                      >
+                        {track.level}
+                      </span>
+                    </div>
+
+                    <h3 className="text-lg font-bold text-white">
+                      {track.title}
+                    </h3>
+                    <p className="mt-1.5 text-sm leading-relaxed text-slate-400">
+                      {track.description}
+                    </p>
+
+                    {/* Progress bar */}
+                    <div className="mt-5">
+                      <div className="mb-1.5 flex items-baseline justify-between text-xs">
+                        <span className="font-medium text-slate-400">
+                          {completedCount}/{total} completed
+                        </span>
+                        <span className="font-mono font-bold text-white">
+                          {pct}%
+                        </span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-slate-800">
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${pct}%` }}
+                          transition={{ duration: 0.7, ease: "easeOut" }}
+                          className={`h-full rounded-full ${
+                            isComplete ? "bg-emerald-500" : "bg-slate-300"
+                          }`}
+                        />
                       </div>
                     </div>
 
-                    <h2 className="text-2xl font-bold text-white mb-3 group-hover:text-cyan-400 transition-colors">
-                      {article.title}
-                    </h2>
+                    {/* Lesson list */}
+                    <ul className="mt-5 space-y-2">
+                      {track.slugs.map((slug, idx) => {
+                        const lesson = bySlug[slug];
+                        if (!lesson) return null;
+                        const done = completed.has(slug);
+                        return (
+                          <li
+                            key={slug}
+                            className="flex items-center gap-2.5 rounded-lg border border-slate-800/80 bg-slate-950/40 px-3 py-2"
+                          >
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                toggle(slug);
+                              }}
+                              className="flex-shrink-0 text-slate-500 transition-colors hover:text-emerald-400"
+                              aria-label={
+                                done ? "Mark incomplete" : "Mark complete"
+                              }
+                            >
+                              {done ? (
+                                <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                              ) : (
+                                <Circle className="h-4 w-4" />
+                              )}
+                            </button>
+                            <Link
+                              href={`/learn/${slug}`}
+                              className="min-w-0 flex-1"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span
+                                  className={`truncate text-sm font-medium ${
+                                    done
+                                      ? "text-slate-500 line-through"
+                                      : "text-slate-200 hover:text-white"
+                                  }`}
+                                >
+                                  {idx + 1}. {lesson.title}
+                                </span>
+                                <span className="flex-shrink-0 text-[10px] text-slate-500">
+                                  {lesson.time}
+                                </span>
+                              </div>
+                            </Link>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        </motion.section>
 
-                    <p className="text-sm text-slate-400 leading-relaxed mb-6">
-                      {article.description}
-                    </p>
-
-                    <div className="flex items-center text-cyan-400 font-semibold text-sm group-hover:gap-3 transition-all gap-2">
-                      Start Reading
-                      <motion.div
-                        animate={{ x: [0, 4, 0] }}
-                        transition={{ duration: 1, repeat: Infinity }}
-                      >
-                        <ArrowRight className="w-4 h-4" />
-                      </motion.div>
-                    </div>
-                  </motion.div>
-                </Link>
-              </motion.div>
-            ))
-          ) : (
-            <motion.div
-              variants={itemVariants}
-              className="col-span-full text-center py-12"
-            >
-              <BookOpen className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-              <p className="text-slate-400 mb-2">No courses found matching your search.</p>
-              <p className="text-sm text-slate-500">Try adjusting your filters or search query.</p>
-            </motion.div>
-          )}
-        </motion.div>
-
-        {/* Learning Tips Section */}
-        <motion.div
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.8 }}
-          className="mt-16 p-8 rounded-xl bg-gradient-to-br from-emerald-500/10 to-cyan-500/10 border border-emerald-500/20"
+        {/* ---------- BROWSE ALL LESSONS ---------- */}
+        <motion.section
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.2 }}
         >
-          <h3 className="text-xl font-bold text-white mb-4">💡 Learning Tips</h3>
-          <ul className="space-y-3 text-slate-300">
+          <h2 className="mb-5 text-sm font-semibold uppercase tracking-wider text-slate-300">
+            Browse all lessons
+          </h2>
+
+          {/* Search and Filters */}
+          <div className="mb-6 space-y-4">
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500" />
+              <input
+                type="text"
+                placeholder="Search lessons..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full rounded-lg border border-slate-800 bg-slate-900/50 py-3 pl-12 pr-4 text-white placeholder-slate-500 transition-colors focus:border-emerald-500/50 focus:outline-none"
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {categories.map((category) => (
+                <button
+                  key={category}
+                  onClick={() => setSelectedCategory(category)}
+                  className={`rounded-lg px-3.5 py-1.5 text-sm font-semibold transition-all ${
+                    selectedCategory === category
+                      ? "border border-slate-700 bg-slate-800 text-white"
+                      : "border border-slate-800/60 bg-slate-900/40 text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  {category}
+                </button>
+              ))}
+            </div>
+
+            <p className="text-xs text-slate-500">
+              Showing {filtered.length} lesson{filtered.length !== 1 ? "s" : ""}
+            </p>
+          </div>
+
+          {/* Lesson grid */}
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="grid gap-4 md:grid-cols-2"
+          >
+            {filtered.length > 0 ? (
+              filtered.map((article) => {
+                const done = completed.has(article.slug);
+                return (
+                  <motion.div
+                    key={article.slug}
+                    variants={itemVariants}
+                    className="group"
+                  >
+                    <Link href={`/learn/${article.slug}`}>
+                      <div className="h-full cursor-pointer rounded-xl border border-slate-800 bg-slate-900/40 p-5 backdrop-blur-md transition-all hover:-translate-y-0.5 hover:border-slate-700">
+                        <div className="mb-3 flex items-start justify-between">
+                          <div className="flex items-center gap-2.5">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-800 bg-slate-950/60 text-slate-300 transition-colors group-hover:border-emerald-500/30 group-hover:text-emerald-400">
+                              {categoryIcons[article.category] || (
+                                <BookOpen className="h-4 w-4" />
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5 text-[11px]">
+                              <span className="font-bold uppercase tracking-wider text-slate-400">
+                                {article.category}
+                              </span>
+                              <span className="text-slate-600">·</span>
+                              <span className="text-slate-500">
+                                {article.time}
+                              </span>
+                            </div>
+                          </div>
+                          {done && (
+                            <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-emerald-400" />
+                          )}
+                        </div>
+
+                        <h3 className="mb-2 text-lg font-bold leading-snug text-white transition-colors group-hover:text-emerald-300">
+                          {article.title}
+                        </h3>
+                        <p className="mb-4 text-sm leading-relaxed text-slate-400">
+                          {article.description}
+                        </p>
+
+                        <div className="flex items-center gap-1.5 text-sm font-semibold text-slate-300 transition-colors group-hover:text-emerald-400">
+                          {done ? "Review lesson" : "Start reading"}
+                          <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                        </div>
+                      </div>
+                    </Link>
+                  </motion.div>
+                );
+              })
+            ) : (
+              <motion.div
+                variants={itemVariants}
+                className="col-span-full py-12 text-center"
+              >
+                <BookOpen className="mx-auto mb-4 h-12 w-12 text-slate-600" />
+                <p className="mb-1 text-slate-400">
+                  No lessons found matching your search.
+                </p>
+                <p className="text-sm text-slate-500">
+                  Try adjusting your filters or search query.
+                </p>
+              </motion.div>
+            )}
+          </motion.div>
+        </motion.section>
+
+        {/* Learning Tips */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+          className="mt-14 rounded-2xl border border-slate-800 bg-slate-900/40 p-7"
+        >
+          <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-emerald-400">
+            How to use this hub
+          </h3>
+          <ul className="space-y-2.5 text-sm text-slate-300">
             <li className="flex gap-3">
-              <span className="text-emerald-400 font-bold">→</span>
-              <span>Read courses in order for a complete understanding of wealth-building principles</span>
+              <span className="text-emerald-400">→</span>
+              Complete Foundations first — it unlocks the rest
             </li>
             <li className="flex gap-3">
-              <span className="text-emerald-400 font-bold">→</span>
-              <span>Take notes on actionable recommendations and implement them immediately</span>
+              <span className="text-emerald-400">→</span>
+              Tap the circle next to any lesson to mark it complete
             </li>
             <li className="flex gap-3">
-              <span className="text-emerald-400 font-bold">→</span>
-              <span>Use the insights from each course to optimize your financial strategy</span>
+              <span className="text-emerald-400">→</span>
+              See a "?" in the dashboard? It links directly back here
             </li>
             <li className="flex gap-3">
-              <span className="text-emerald-400 font-bold">→</span>
-              <span>Revisit courses every 6 months to refresh your knowledge and track progress</span>
+              <span className="text-emerald-400">→</span>
+              Revisit every 6 months to refresh and track progress
             </li>
           </ul>
         </motion.div>
@@ -279,4 +509,5 @@ export default function LearnPage() {
     </div>
   );
 }
+
 

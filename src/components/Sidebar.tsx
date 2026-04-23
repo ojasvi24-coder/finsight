@@ -18,53 +18,45 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
     { name: "Learning Hub", path: "/learn", icon: BookOpen },
   ];
 
-  // Helper to handle link clicks
   const handleLinkClick = () => {
-    if (onNavigate) {
-      onNavigate();
-    }
+    if (onNavigate) onNavigate();
   };
 
   return (
-    <aside className="h-screen w-64 bg-slate-950/80 backdrop-blur-xl border-r border-slate-800 p-6 flex flex-col justify-between relative">
-      {/* Top Section: Logo & Links */}
+    <aside className="relative flex h-screen w-64 flex-col justify-between border-r border-slate-800 bg-slate-950/80 p-6 backdrop-blur-xl">
+      {/* Top Section */}
       <div>
-        {/* App Logo/Brand & Close button for mobile */}
-        <div className="mb-10 pl-2 flex items-center justify-between">
-          <h2 className="text-2xl font-black bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent">
+        <div className="mb-10 flex items-center justify-between pl-2">
+          <h2 className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-2xl font-black text-transparent">
             FinSight
           </h2>
-          {/* Mobile-only close button if you want it inside the sidebar too */}
-          <button 
-            onClick={handleLinkClick} 
-            className="lg:hidden p-1 text-slate-400 hover:text-white"
+          <button
+            onClick={handleLinkClick}
+            className="p-1 text-slate-400 transition-colors hover:text-white lg:hidden"
+            aria-label="Close sidebar"
           >
             <X size={20} />
           </button>
         </div>
 
-        {/* Navigation Links */}
-        <nav className="space-y-2">
+        {/* Navigation */}
+        <nav className="space-y-1.5">
           {menuItems.map((item) => {
             const isActive = pathname === item.path;
             const Icon = item.icon;
 
             return (
-              <Link 
-                key={item.name} 
-                href={item.path}
-                onClick={handleLinkClick}
-              >
+              <Link key={item.name} href={item.path} onClick={handleLinkClick}>
                 <motion.div
-                  whileHover={{ x: 5 }}
-                  whileTap={{ scale: 0.95 }}
-                  className={`flex items-center gap-4 px-4 py-3 rounded-xl transition-colors ${
+                  whileHover={{ x: 4 }}
+                  whileTap={{ scale: 0.97 }}
+                  className={`flex items-center gap-3.5 rounded-lg px-3.5 py-2.5 text-sm transition-colors ${
                     isActive
-                      ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"
-                      : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
+                      ? "border border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                      : "border border-transparent text-slate-400 hover:bg-slate-900 hover:text-slate-100"
                   }`}
                 >
-                  <Icon className="w-5 h-5" />
+                  <Icon className="h-[18px] w-[18px]" />
                   <span className="font-medium">{item.name}</span>
                 </motion.div>
               </Link>
@@ -73,14 +65,28 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
         </nav>
       </div>
 
-      {/* Bottom Section: Exit/Logout Button */}
-      <div>
-        <button 
+      {/* Bottom Section — Neutral gray Exit, no longer looks like "emergency stop" */}
+      <div className="space-y-3">
+        {/* Small account identifier strip to soften the bottom */}
+        <div className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900/50 p-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-800 text-xs font-semibold text-slate-300">
+            JD
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-xs font-semibold text-slate-200">
+              Jordan Doe
+            </p>
+            <p className="truncate text-[11px] text-slate-500">Pro account</p>
+          </div>
+        </div>
+
+        <button
           onClick={() => alert("Logging out...")}
-          className="w-full flex items-center gap-4 px-4 py-3 rounded-xl text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors border border-transparent hover:border-red-500/20 group"
+          className="group flex w-full items-center gap-3.5 rounded-lg border border-transparent px-3.5 py-2.5 text-sm text-slate-400 transition-colors hover:border-slate-700 hover:bg-slate-900 hover:text-slate-100"
+          aria-label="Sign out"
         >
-          <LogOut className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
-          <span className="font-medium">Exit</span>
+          <LogOut className="h-[18px] w-[18px] transition-transform group-hover:-translate-x-0.5" />
+          <span className="font-medium">Sign out</span>
         </button>
       </div>
     </aside>
