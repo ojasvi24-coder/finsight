@@ -41,7 +41,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { useUser } from "@/app/user/page";
+import useUser from "@/app/user/page";
 
 type TimeRange = "3M" | "6M" | "12M";
 
