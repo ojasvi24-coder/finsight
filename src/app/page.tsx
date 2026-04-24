@@ -9,10 +9,17 @@ import {
   Lock,
   FileCheck,
   TrendingUp,
+  TrendingDown,
   ArrowRight,
   Sparkles,
+  Plus,
+  Wallet,
+  AlertCircle,
+  Target,
+  Activity,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useUser } from "@/lib/user";
 
 /* ---------- Mini "live" chart preview (inline SVG, no lib needed) ---------- */
 function LiveChartPreview() {
@@ -142,6 +149,53 @@ function LiveChartPreview() {
 
 /* ---------- Home Page ---------- */
 export default function HomePage() {
+  const { firstName, hasProfile } = useUser();
+
+  // Live net worth ticker state (animates gently to feel alive)
+  const baseNetWorth = 152480;
+  const [tickerValue, setTickerValue] = useState(baseNetWorth);
+  const [tickerChange, setTickerChange] = useState(3210);
+  const [tickerDirection, setTickerDirection] = useState<"up" | "down">("up");
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setTickerValue((prev) => {
+        const drift = (Math.random() - 0.48) * 180;
+        const next = prev + drift;
+        setTickerDirection(drift >= 0 ? "up" : "down");
+        setTickerChange(Math.round(next - baseNetWorth));
+        return next;
+      });
+    }, 2800);
+    return () => clearInterval(id);
+  }, []);
+
+  // Daily Three — dynamic, would be LLM-generated in production.
+  // These are the three insights every user sees on load.
+  const dailyThree = [
+    {
+      kind: "Action",
+      icon: AlertCircle,
+      accent: "text-amber-400 bg-amber-500/10 border-amber-500/20",
+      text: "You spent 15% more on dining this week; adjust your weekend budget.",
+      href: "/dashboard",
+    },
+    {
+      kind: "Market",
+      icon: TrendingUp,
+      accent: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
+      text: "Your tech holdings are up today; consider rebalancing toward bonds.",
+      href: "/learn/the-art-of-asset-allocation",
+    },
+    {
+      kind: "Milestone",
+      icon: Target,
+      accent: "text-cyan-400 bg-cyan-500/10 border-cyan-500/20",
+      text: "You're $200 away from your Emergency Fund goal. Almost there.",
+      href: "/dashboard",
+    },
+  ];
+
   const containerVariants: Variants = {
     hidden: { opacity: 0 },
     visible: {
@@ -194,7 +248,68 @@ export default function HomePage() {
         />
       </div>
 
-      <div className="relative z-10 mx-auto max-w-6xl px-6 py-20 sm:px-8">
+      <div className="relative z-10 mx-auto max-w-6xl px-6 pt-8 pb-20 sm:px-8">
+        {/* ---------- PULSE HEADER (live net worth ticker) ---------- */}
+        {hasProfile && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="mb-10 flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                  Live
+                </span>
+              </div>
+              <div>
+                <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">
+                  Net Worth{firstName ? ` · ${firstName}` : ""}
+                </div>
+                <motion.div
+                  key={Math.round(tickerValue / 50)}
+                  initial={{ opacity: 0.6, y: 2 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="font-mono text-xl font-bold text-white sm:text-2xl"
+                >
+                  ${Math.round(tickerValue).toLocaleString()}
+                </motion.div>
+              </div>
+              <div
+                className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                  tickerDirection === "up"
+                    ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+                    : "border-rose-500/20 bg-rose-500/10 text-rose-400"
+                }`}
+              >
+                {tickerDirection === "up" ? (
+                  <TrendingUp className="h-3.5 w-3.5" />
+                ) : (
+                  <TrendingDown className="h-3.5 w-3.5" />
+                )}
+                {tickerChange >= 0 ? "+" : ""}${Math.abs(tickerChange).toLocaleString()} today
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Link href="/dashboard">
+                <button className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-xs font-semibold text-slate-200 transition-colors hover:border-slate-600 hover:bg-slate-900">
+                  <Plus className="h-3.5 w-3.5" />
+                  Add Transaction
+                </button>
+              </Link>
+              <Link href="/dashboard">
+                <button className="flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-2 text-xs font-semibold text-slate-950 transition-colors hover:bg-emerald-400">
+                  <BarChart3 className="h-3.5 w-3.5" />
+                  Check Portfolio
+                </button>
+              </Link>
+            </div>
+          </motion.div>
+        )}
+
         <motion.div
           variants={containerVariants}
           initial="hidden"
@@ -291,6 +406,56 @@ export default function HomePage() {
           </motion.div>
         </motion.div>
 
+        {/* ---------- DAILY THREE ---------- */}
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-80px" }}
+          transition={{ duration: 0.6 }}
+          className="mt-20"
+        >
+          <div className="mb-6 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-emerald-400" />
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-300">
+                Your Daily Three
+              </h2>
+            </div>
+            <span className="text-xs text-slate-500">Refreshed this morning</span>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            {dailyThree.map((item, i) => {
+              const Icon = item.icon;
+              return (
+                <Link key={item.kind} href={item.href}>
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.4, delay: i * 0.1 }}
+                    whileHover={{ y: -3 }}
+                    className="group h-full cursor-pointer rounded-2xl border border-slate-800 bg-slate-900/50 p-5 backdrop-blur-sm transition-colors hover:border-slate-700"
+                  >
+                    <div className="mb-3 flex items-center justify-between">
+                      <span
+                        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${item.accent}`}
+                      >
+                        <Icon className="h-3 w-3" />
+                        {item.kind}
+                      </span>
+                      <ArrowRight className="h-3.5 w-3.5 text-slate-600 transition-all group-hover:translate-x-0.5 group-hover:text-emerald-400" />
+                    </div>
+                    <p className="text-sm leading-relaxed text-slate-200">
+                      {item.text}
+                    </p>
+                  </motion.div>
+                </Link>
+              );
+            })}
+          </div>
+        </motion.section>
+
         {/* ---------- SECURITY FIRST ---------- */}
         <motion.section
           initial={{ opacity: 0, y: 40 }}
@@ -349,17 +514,15 @@ export default function HomePage() {
           className="mt-20 grid gap-6 rounded-2xl border border-slate-800 bg-slate-900/40 p-8 backdrop-blur-sm sm:grid-cols-3"
         >
           <div>
-            <div className="font-mono text-3xl font-bold text-white">5,000+</div>
+            <div className="font-mono text-3xl font-bold text-white">24/7</div>
             <p className="mt-1 text-sm text-slate-400">
-              Everyday investors simplifying their strategy
+              Real-time portfolio monitoring
             </p>
           </div>
           <div>
-            <div className="font-mono text-3xl font-bold text-white">
-              4.8 ★
-            </div>
+            <div className="font-mono text-3xl font-bold text-white">150+</div>
             <p className="mt-1 text-sm text-slate-400">
-              Average rating from real users
+              Behavioral signals analyzed per user
             </p>
           </div>
           <div>

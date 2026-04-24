@@ -17,6 +17,8 @@ import {
   Target,
   Layers,
   Sparkles,
+  Trophy,
+  Award,
 } from "lucide-react";
 
 /* ---------- data ---------- */
@@ -255,6 +257,57 @@ export default function LearnPage() {
             your dashboard. No homework — just enough to make your next decision.
           </p>
         </motion.header>
+
+        {/* ---------- EARN-TO-LEARN POINTS BAR ---------- */}
+        <motion.section
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="mb-10 overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-br from-amber-500/[0.06] via-slate-900/60 to-slate-900/60 p-5 backdrop-blur-sm"
+        >
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/15">
+                <Trophy className="h-5 w-5 text-amber-400" />
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-amber-400">
+                  Earn to learn
+                </div>
+                <div className="mt-0.5 flex items-baseline gap-2">
+                  <span className="font-mono text-2xl font-bold text-white">
+                    {completed.size * 50}
+                  </span>
+                  <span className="text-xs font-semibold text-slate-400">XP</span>
+                </div>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {completed.size === articles.length
+                    ? "All lessons complete. You're a master."
+                    : `${articles.length - completed.size} lessons until you reach ${articles.length * 50} XP`}
+                </p>
+              </div>
+            </div>
+
+            {/* Achievements strip */}
+            <div className="flex items-center gap-2">
+              <AchievementBadge
+                unlocked={completed.size >= 1}
+                label="First Step"
+                hint="Complete 1 lesson"
+              />
+              <AchievementBadge
+                unlocked={completed.size >= 3}
+                label="On a Roll"
+                hint="Complete 3 lessons"
+              />
+              <AchievementBadge
+                unlocked={completed.size >= articles.length}
+                label="Scholar"
+                hint="Complete all lessons"
+              />
+            </div>
+          </div>
+        </motion.section>
 
         {/* ---------- FOR YOU FEED ---------- */}
         <motion.section
@@ -582,6 +635,43 @@ export default function LearnPage() {
           </ul>
         </motion.div>
       </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   AchievementBadge — small locked/unlocked pill
+   ============================================================ */
+function AchievementBadge({
+  unlocked,
+  label,
+  hint,
+}: {
+  unlocked: boolean;
+  label: string;
+  hint: string;
+}) {
+  return (
+    <div
+      title={hint}
+      className={`group relative hidden flex-col items-center gap-1 rounded-lg border px-3 py-2 transition-all sm:flex ${
+        unlocked
+          ? "border-amber-500/30 bg-amber-500/10"
+          : "border-slate-800 bg-slate-900/50"
+      }`}
+    >
+      <Award
+        className={`h-4 w-4 ${
+          unlocked ? "text-amber-400" : "text-slate-600"
+        }`}
+      />
+      <span
+        className={`text-[9px] font-bold uppercase tracking-wider ${
+          unlocked ? "text-amber-300" : "text-slate-500"
+        }`}
+      >
+        {label}
+      </span>
     </div>
   );
 }
