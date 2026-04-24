@@ -60,6 +60,7 @@ import WebhookGuardrails from "@/components/WebhookGuardrails";
 import SecuritySovereignty from "@/components/SecuritySovereignty";
 import OcrUpload from "@/components/OcrUpload";
 import WarRoomView from "@/components/WarRoomView";
+import SectionNav from "@/components/SectionNav";
 
 type TimeRange = "3M" | "6M" | "12M";
 
@@ -308,7 +309,7 @@ function MergedFinancialDashboard() {
         setFocusedAsset(detail.symbol);
         // Scroll the chart into view so user sees the overlay
         document
-          .getElementById("net-worth-trend")
+          .getElementById("asset-architecture")
           ?.scrollIntoView({ behavior: "smooth", block: "center" });
       }
     };
@@ -679,6 +680,9 @@ function MergedFinancialDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 selection:bg-emerald-500/30">
+      {/* Pinned section nav (desktop right rail / mobile bottom sheet) */}
+      <SectionNav />
+
       {/* Subtle ambient background — toned down from previous neon glows */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(1000px_600px_at_10%_0%,rgba(16,185,129,0.05),transparent_60%)]" />
@@ -688,6 +692,7 @@ function MergedFinancialDashboard() {
       <div className="relative z-10 mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 sm:py-10">
         {/* ---------- GREETING HEADER ---------- */}
         <motion.header
+          id="snapshot"
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45 }}
@@ -1087,7 +1092,7 @@ function MergedFinancialDashboard() {
           <div className="space-y-5 lg:col-span-2">
             {/* Net Worth Trend */}
             <motion.div
-              id="net-worth-trend"
+              id="asset-architecture"
               variants={itemVariants}
               initial="hidden"
               animate="visible"
@@ -1190,6 +1195,7 @@ function MergedFinancialDashboard() {
 
             {/* Wealth Projection */}
             <motion.section
+              id="wealth-projection"
               ref={wealthProjectionRef}
               variants={itemVariants}
               initial="hidden"
@@ -1518,6 +1524,7 @@ function MergedFinancialDashboard() {
 
           {/* Market Pulse — Fear/Greed sentiment gauge */}
           <motion.section
+            id="market-pulse"
             initial={{ opacity: 0, y: 12 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
@@ -1573,6 +1580,7 @@ function MergedFinancialDashboard() {
 
           {/* Monte Carlo */}
           <motion.section
+            id="stress-test"
             initial={{ opacity: 0, y: 12 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
@@ -1597,6 +1605,7 @@ function MergedFinancialDashboard() {
         <div className="grid gap-5 lg:grid-cols-2">
           {/* Tax-Loss Harvest */}
           <motion.section
+            id="tax-scanner"
             initial={{ opacity: 0, y: 12 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
@@ -1644,6 +1653,7 @@ function MergedFinancialDashboard() {
 
         {/* Security Sovereignty spans full width */}
         <motion.section
+          id="security-vault"
           initial={{ opacity: 0, y: 12 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
