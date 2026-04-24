@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, BarChart3, BookOpen, LogOut, X } from "lucide-react";
+import { Home, BarChart3, BookOpen, LogOut, X, UserPlus } from "lucide-react";
 import { motion } from "framer-motion";
+import { useUser } from "@/app/user/page";
 
 interface SidebarProps {
   onNavigate?: () => void;
@@ -11,11 +12,12 @@ interface SidebarProps {
 
 export default function Sidebar({ onNavigate }: SidebarProps) {
   const pathname = usePathname();
+  const { firstName, initials, hasProfile, email } = useUser();
 
   const menuItems = [
     { name: "Home", path: "/", icon: Home },
     { name: "Dashboard", path: "/dashboard", icon: BarChart3 },
-    { name: "Learning Hub", path: "/learn", icon: BookOpen },
+    { name: "Guide", path: "/learn", icon: BookOpen },
   ];
 
   const handleLinkClick = () => {
@@ -65,20 +67,43 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
         </nav>
       </div>
 
-      {/* Bottom Section — Neutral gray Exit, no longer looks like "emergency stop" */}
+      {/* Bottom Section — Dynamic profile strip (no "Pro account" label) */}
       <div className="space-y-3">
-        {/* Small account identifier strip to soften the bottom */}
-        <div className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900/50 p-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-800 text-xs font-semibold text-slate-300">
-            JD
+        {hasProfile ? (
+          <div className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900/50 p-3">
+            <div
+              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500/30 to-cyan-500/20 text-xs font-bold text-emerald-200 ring-1 ring-emerald-500/20"
+              aria-label={`Avatar for ${firstName}`}
+            >
+              {initials}
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-xs font-semibold text-slate-200">
+                {firstName}
+              </p>
+              <p className="truncate text-[11px] text-slate-500">
+                {email || "Signed in"}
+              </p>
+            </div>
           </div>
-          <div className="min-w-0">
-            <p className="truncate text-xs font-semibold text-slate-200">
-              Jordan Doe
-            </p>
-            <p className="truncate text-[11px] text-slate-500">Pro account</p>
-          </div>
-        </div>
+        ) : (
+          // Empty state — prompt the user to set their name via Dashboard Settings
+          <Link href="/dashboard" onClick={handleLinkClick}>
+            <div className="flex items-center gap-3 rounded-lg border border-dashed border-slate-700 bg-slate-900/30 p-3 transition-colors hover:border-slate-600 hover:bg-slate-900/60">
+              <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-slate-800 text-slate-400">
+                <UserPlus className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-xs font-semibold text-slate-300">
+                  Set your name
+                </p>
+                <p className="truncate text-[11px] text-slate-500">
+                  Open Settings →
+                </p>
+              </div>
+            </div>
+          </Link>
+        )}
 
         <button
           onClick={() => alert("Logging out...")}
@@ -92,3 +117,4 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
     </aside>
   );
 }
+

@@ -41,6 +41,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import { useUser } from "@/app/user/page";
 
 type TimeRange = "3M" | "6M" | "12M";
 
@@ -222,6 +223,9 @@ function syntheticSparkline(changePct: number, seed = 10): number[] {
    MAIN DASHBOARD
    ============================================================ */
 export default function MergedFinancialDashboard() {
+  const { firstName, hasProfile, name: userName, updateUser } = useUser();
+  const [nameDraft, setNameDraft] = useState("");
+
   const [showBalance, setShowBalance] = useState(true);
   const [isClient, setIsClient] = useState(false);
 
@@ -256,6 +260,7 @@ export default function MergedFinancialDashboard() {
   const [isLoadingMarket, setIsLoadingMarket] = useState(true);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const transactionFormRef = useRef<HTMLDivElement>(null);
+  const aiModelerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setIsClient(true);
@@ -263,6 +268,11 @@ export default function MergedFinancialDashboard() {
     const interval = setInterval(fetchLiveMarket, 60000);
     return () => clearInterval(interval);
   }, []);
+
+  // Sync the settings draft with the stored name whenever it loads
+  useEffect(() => {
+    setNameDraft(userName);
+  }, [userName]);
 
   const fetchLiveMarket = async () => {
     setIsLoadingMarket(true);
@@ -452,6 +462,32 @@ export default function MergedFinancialDashboard() {
     return insights.find((i) => i.type === "warning") ?? insights[0];
   }, [insights]);
 
+  // "Daily Impact" driver — explains the balance change in plain language
+  const balanceDriver = useMemo(() => {
+    if (netCashFlow === 0) return "Income and expenses balanced this period.";
+    if (netCashFlow > 0) {
+      const topCategory = transactions.length > 0 ? "savings from your income" : "savings";
+      return `Up $${Math.abs(balanceChange).toLocaleString()} — driven by your monthly ${topCategory}.`;
+    }
+    // find biggest expense category to name in the narrative
+    const byCat: Record<string, number> = {};
+    transactions.forEach((t) => {
+      byCat[t.category] = (byCat[t.category] || 0) + t.amount;
+    });
+    const [topCat] = Object.entries(byCat).sort((a, b) => b[1] - a[1])[0] || [];
+    const because = topCat ? `largely driven by ${topCat.toLowerCase()} spending` : "driven by current expenses";
+    return `Down $${Math.abs(balanceChange).toLocaleString()} — ${because}.`;
+  }, [netCashFlow, balanceChange, transactions]);
+
+  // Humanized version of the top insight's narrative
+  const topInsightNarrative = useMemo(() => {
+    if (!topInsight) return "";
+    if (topInsight.type === "warning") {
+      return `We noticed ${topInsight.msg.charAt(0).toLowerCase()}${topInsight.msg.slice(1)} Click below to see what a small change could do.`;
+    }
+    return topInsight.msg;
+  }, [topInsight]);
+
   // Handlers
   const handleAddTransaction = () => {
     if (!newTransaction.name || newTransaction.amount === 0) return;
@@ -515,6 +551,19 @@ export default function MergedFinancialDashboard() {
     transactionFormRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  // Click target for the "Simulate changes" arrow on the Top Insight card.
+  // Opens the AI modeler (if closed) and scrolls it into view.
+  const handleSimulateChangesClick = () => {
+    if (!showAIModeler) setShowAIModeler(true);
+    // Give React a beat to render the newly-expanded section before scrolling
+    setTimeout(() => {
+      aiModelerRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 150);
+  };
+
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: { opacity: 1, transition: { staggerChildren: 0.08, delayChildren: 0.1 } },
@@ -551,7 +600,16 @@ export default function MergedFinancialDashboard() {
         >
           <div>
             <p className="text-sm font-medium text-slate-400">
-              {getGreeting()}, Jordan
+              {getGreeting()}
+              {hasProfile ? `, ${firstName}` : ""}
+              {hasProfile && (
+                <span className="text-slate-500">
+                  {" · "}
+                  {balancePositive
+                    ? "your portfolio is steady today"
+                    : "a few things need a look"}
+                </span>
+              )}
             </p>
             <h1 className="mt-1 text-2xl font-bold tracking-tight text-white sm:text-3xl">
               Here's your financial snapshot.
@@ -566,7 +624,7 @@ export default function MergedFinancialDashboard() {
             </p>
           </div>
 
-          {/* Learning Hub — neutral button, not emerald gradient */}
+          {/* Guide — neutral button, not emerald gradient */}
           <Link href="/learn">
             <motion.button
               whileHover={{ scale: 1.02 }}
@@ -574,10 +632,41 @@ export default function MergedFinancialDashboard() {
               className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-2.5 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-600 hover:bg-slate-900"
             >
               <BookOpen className="h-4 w-4 text-slate-400" />
-              Learning Hub
+              Guide
             </motion.button>
           </Link>
         </motion.header>
+
+        {/* ---------- FIRST-TIME USER EMPTY STATE ---------- */}
+        {!hasProfile && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex flex-col gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-5 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-500/15">
+                <Sparkles className="h-4 w-4 text-emerald-400" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-white">
+                  Welcome to FinSight — let's personalize this.
+                </p>
+                <p className="mt-0.5 text-xs text-slate-400">
+                  Add your name so your dashboard greets you properly. Takes 10
+                  seconds.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowSettingsModal(true)}
+              className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400"
+            >
+              Set up profile
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          </motion.div>
+        )}
 
         {/* ---------- LIVE MARKET TICKER (with sparklines) ---------- */}
         <div className="flex gap-3 overflow-x-auto pb-2">
@@ -688,14 +777,17 @@ export default function MergedFinancialDashboard() {
               <div className="font-mono text-5xl font-bold tracking-tight text-white sm:text-6xl">
                 {showBalance ? `$${currentBalance.toLocaleString()}` : "••••••"}
               </div>
+              {/* Daily Impact — narrative "so what?" line */}
               <div
-                className={`mt-2 text-sm font-semibold ${
+                className={`mt-2 text-sm font-medium ${
                   balancePositive ? "text-emerald-400" : "text-rose-400"
                 }`}
               >
-                {balancePositive ? "+" : "-"}$
-                {Math.abs(balanceChange).toLocaleString()} this period
+                {balancePositive ? "+" : "-"}${Math.abs(balanceChange).toLocaleString()}
+                {" · "}
+                {balancePositive ? "+" : ""}{balanceChangePercent}%
               </div>
+              <p className="mt-1 text-xs text-slate-400">{balanceDriver}</p>
             </div>
 
             {/* Quick stats */}
@@ -760,15 +852,15 @@ export default function MergedFinancialDashboard() {
               {topInsight?.title}
             </h3>
             <p className="mb-4 text-sm leading-relaxed text-slate-300">
-              {topInsight?.msg}
+              {topInsightNarrative}
             </p>
 
             <button
-              onClick={() => setShowAIModeler(true)}
-              className="group inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-400 transition-colors hover:text-emerald-300"
+              onClick={handleSimulateChangesClick}
+              className="group inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-sm font-semibold text-emerald-300 transition-all hover:border-emerald-400/50 hover:bg-emerald-500/20 hover:text-emerald-200"
             >
               Simulate changes
-              <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+              <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
             </button>
           </motion.aside>
         </div>
@@ -855,7 +947,7 @@ export default function MergedFinancialDashboard() {
               </div>
               <div className="h-[280px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={monthlyTrendData}>
+                  <LineChart data={monthlyTrendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                     <XAxis dataKey="month" stroke="#64748b" fontSize={11} />
                     <YAxis
@@ -864,14 +956,18 @@ export default function MergedFinancialDashboard() {
                       tickFormatter={(v) => `$${v / 1000}k`}
                     />
                     <Tooltip
+                      cursor={{ stroke: "#10b981", strokeDasharray: "4 4", strokeOpacity: 0.5 }}
                       contentStyle={{
-                        backgroundColor: "#0f172a",
-                        border: "1px solid #1e293b",
+                        backgroundColor: "rgba(15, 23, 42, 0.95)",
+                        border: "1px solid rgba(16, 185, 129, 0.3)",
                         borderRadius: "8px",
+                        backdropFilter: "blur(8px)",
                       }}
-                      formatter={(value: any) =>
-                        `$${Number(value).toLocaleString()}`
-                      }
+                      labelStyle={{ color: "#f1f5f9", fontWeight: 700, marginBottom: 4 }}
+                      formatter={(value: any, name: any) => [
+                        `$${Number(value).toLocaleString()}`,
+                        name === "balance" ? "Balance" : "Spending",
+                      ]}
                     />
                     <Legend />
                     <Line
@@ -879,12 +975,16 @@ export default function MergedFinancialDashboard() {
                       dataKey="balance"
                       stroke="#10b981"
                       dot={{ fill: "#10b981", r: 4 }}
+                      activeDot={{ r: 6, fill: "#10b981", stroke: "#020617", strokeWidth: 2 }}
                       strokeWidth={2.5}
                       name="Balance"
                     />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
+              <p className="mt-3 text-xs text-slate-500">
+                💡 Hover over the chart to see exact balance at each month.
+              </p>
             </motion.div>
 
             {/* Wealth Projection */}
@@ -933,11 +1033,14 @@ export default function MergedFinancialDashboard() {
                       tickFormatter={(v) => `$${v / 1000}k`}
                     />
                     <Tooltip
+                      cursor={{ stroke: "#10b981", strokeDasharray: "4 4", strokeOpacity: 0.5 }}
                       contentStyle={{
-                        backgroundColor: "#0f172a",
-                        border: "1px solid #1e293b",
+                        backgroundColor: "rgba(15, 23, 42, 0.95)",
+                        border: "1px solid rgba(16, 185, 129, 0.3)",
                         borderRadius: "8px",
+                        backdropFilter: "blur(8px)",
                       }}
+                      labelStyle={{ color: "#f1f5f9", fontWeight: 700, marginBottom: 4 }}
                       formatter={(value: any) =>
                         `$${Number(value).toLocaleString()}`
                       }
@@ -949,6 +1052,7 @@ export default function MergedFinancialDashboard() {
                       fillOpacity={1}
                       fill="url(#colorBal)"
                       strokeWidth={2.5}
+                      activeDot={{ r: 6, fill: "#10b981", stroke: "#020617", strokeWidth: 2 }}
                     />
                     {showAIModeler && (
                       <Area
@@ -1009,6 +1113,7 @@ export default function MergedFinancialDashboard() {
             </motion.section>
 
             {/* AI Optimizer */}
+            <div ref={aiModelerRef}>
             <AnimatePresence>
               {showAIModeler && (
                 <motion.section
@@ -1052,6 +1157,7 @@ export default function MergedFinancialDashboard() {
                 </motion.section>
               )}
             </AnimatePresence>
+            </div>
           </div>
 
           {/* RIGHT SIDEBAR */}
@@ -1302,7 +1408,7 @@ export default function MergedFinancialDashboard() {
                 >
                   <span className="flex items-center gap-2">
                     <BookOpen className="h-4 w-4 text-slate-400" />
-                    Learning Hub
+                    Open Guide
                   </span>
                   <ArrowUpRight className="h-4 w-4 text-slate-500 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
                 </motion.button>
@@ -1383,6 +1489,28 @@ export default function MergedFinancialDashboard() {
                 </div>
 
                 <div className="space-y-4">
+                  {/* Profile — the Anti-Jordan fix */}
+                  <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-4">
+                    <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">
+                      Your Profile
+                    </h3>
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                        Your Name
+                      </label>
+                      <input
+                        type="text"
+                        value={nameDraft}
+                        onChange={(e) => setNameDraft(e.target.value)}
+                        placeholder="e.g. Alex Morgan"
+                        className="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3.5 py-2.5 text-sm text-white outline-none transition-colors focus:border-emerald-500/50"
+                      />
+                      <p className="pt-1 text-[11px] text-slate-500">
+                        We use this for your greeting and avatar initials. Stored locally on this device.
+                      </p>
+                    </div>
+                  </div>
+
                   <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-4">
                     <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">
                       Dashboard Settings
@@ -1436,7 +1564,10 @@ export default function MergedFinancialDashboard() {
                   <motion.button
                     whileHover={{ scale: 1.01 }}
                     whileTap={{ scale: 0.99 }}
-                    onClick={() => setShowSettingsModal(false)}
+                    onClick={() => {
+                      updateUser({ name: nameDraft.trim() });
+                      setShowSettingsModal(false);
+                    }}
                     className="w-full rounded-lg bg-emerald-500 py-3 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400"
                   >
                     Save Settings
@@ -1468,7 +1599,7 @@ export default function MergedFinancialDashboard() {
               whileTap={{ scale: 0.98 }}
               className="mt-5 inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-6 py-3 text-sm font-semibold text-slate-950 shadow-[0_0_20px_-8px_rgba(16,185,129,0.6)] transition-all hover:bg-emerald-400"
             >
-              Explore Learning Hub
+              Explore the Guide
               <ArrowRight className="h-4 w-4" />
             </motion.button>
           </Link>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { useUser } from "@/app/user/page";
 import {
   BookOpen,
   TrendingUp,
@@ -15,6 +16,7 @@ import {
   Flag,
   Target,
   Layers,
+  Sparkles,
 } from "lucide-react";
 
 /* ---------- data ---------- */
@@ -166,6 +168,7 @@ function useCompletion() {
 
 /* ---------- page ---------- */
 export default function LearnPage() {
+  const { firstName, hasProfile } = useUser();
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const { completed, toggle } = useCompletion();
@@ -198,6 +201,34 @@ export default function LearnPage() {
 
   const bySlug = Object.fromEntries(articles.map((a) => [a.slug, a]));
 
+  // "For You" feed — context-aware recommendations.
+  // Heuristic: surface the next uncompleted lesson from each track,
+  // plus one spotlight article the user hasn't finished yet.
+  const forYouArticles = (() => {
+    const firstUncompleted = tracks
+      .map((t) => t.slugs.find((s) => !completed.has(s)))
+      .filter(Boolean) as string[];
+    const uniqueSlugs = Array.from(new Set(firstUncompleted));
+    // Fall back to first articles if everything is completed
+    if (uniqueSlugs.length < 3) {
+      for (const a of articles) {
+        if (!uniqueSlugs.includes(a.slug)) uniqueSlugs.push(a.slug);
+        if (uniqueSlugs.length === 3) break;
+      }
+    }
+    return uniqueSlugs.slice(0, 3).map((slug) => bySlug[slug]).filter(Boolean);
+  })();
+
+  // Context-aware "because you..." copy for each recommendation
+  const forYouReasons: Record<string, string> = {
+    "50-30-20-framework": "Because you're tracking spending",
+    "compound-interest": "Because small amounts compound fast",
+    "index-funds-vs-stocks": "Because you hold market assets",
+    "market-history-lessons": "Because markets move daily",
+    "the-art-of-asset-allocation": "Because your portfolio is 70/20/10",
+    "tax-efficient-investing": "Because taxes eat returns",
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 selection:bg-emerald-500/30">
       {/* subtle ambient glow */}
@@ -214,16 +245,61 @@ export default function LearnPage() {
           className="mb-10"
         >
           <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
-            Learning Hub
+            Your Guide
           </span>
           <h1 className="mt-1.5 text-3xl font-bold tracking-tight text-white sm:text-4xl">
-            Build wealth knowledge, step by step.
+            Learn while you earn.
           </h1>
           <p className="mt-2 max-w-2xl text-base text-slate-400">
-            Progressive tracks, bite-sized lessons, and concepts that link
-            directly to the numbers you see in your dashboard.
+            Short, plain-English lessons tied to the exact numbers you see on
+            your dashboard. No homework — just enough to make your next decision.
           </p>
         </motion.header>
+
+        {/* ---------- FOR YOU FEED ---------- */}
+        <motion.section
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="mb-12"
+        >
+          <div className="mb-5 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-emerald-400" />
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-300">
+                {hasProfile ? `For you, ${firstName}` : "For you"}
+              </h2>
+            </div>
+            <span className="text-xs text-slate-500">
+              Picked based on your activity
+            </span>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            {forYouArticles.map((article) => (
+              <Link key={article.slug} href={`/learn/${article.slug}`}>
+                <motion.div
+                  whileHover={{ y: -3 }}
+                  className="group h-full cursor-pointer rounded-xl border border-slate-800 bg-gradient-to-br from-emerald-500/[0.04] to-slate-900/60 p-5 backdrop-blur-sm transition-colors hover:border-emerald-500/30"
+                >
+                  <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-emerald-400">
+                    {forYouReasons[article.slug] ?? "Recommended next"}
+                  </div>
+                  <h3 className="mb-2 text-base font-bold leading-snug text-white">
+                    {article.title}
+                  </h3>
+                  <p className="mb-4 text-xs leading-relaxed text-slate-400">
+                    {article.description}
+                  </p>
+                  <div className="flex items-center justify-between text-[11px] text-slate-500">
+                    <span>{article.time}</span>
+                    <ArrowRight className="h-3.5 w-3.5 text-emerald-400 transition-transform group-hover:translate-x-0.5" />
+                  </div>
+                </motion.div>
+              </Link>
+            ))}
+          </div>
+        </motion.section>
 
         {/* ---------- LEARNING TRACKS ---------- */}
         <motion.section
@@ -509,5 +585,6 @@ export default function LearnPage() {
     </div>
   );
 }
+
 
 

@@ -258,7 +258,7 @@ export default function HomePage() {
                   className="group flex w-full items-center justify-center gap-2.5 rounded-xl border border-slate-700 bg-slate-900/60 px-7 py-4 text-base font-semibold text-slate-200 backdrop-blur-sm transition-all hover:border-slate-600 hover:bg-slate-900 sm:w-auto"
                 >
                   <BookOpen className="h-5 w-5 text-slate-400" />
-                  Explore Learning Hub
+                  Browse the Guide
                 </motion.button>
               </Link>
             </motion.div>
@@ -266,15 +266,15 @@ export default function HomePage() {
             {/* micro trust line */}
             <motion.div
               variants={itemVariants}
-              className="flex flex-wrap items-center gap-x-6 gap-y-2 pt-4 text-xs text-slate-500"
+              className="flex flex-wrap items-center gap-x-6 gap-y-2 pt-4 text-xs text-slate-400"
             >
-              <span className="flex items-center gap-1.5">
-                <ShieldCheck className="h-4 w-4 text-slate-400" />
-                Read-only account access
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/[0.06] px-2.5 py-1 font-semibold text-emerald-300">
+                <Lock className="h-3.5 w-3.5" />
+                Read-only access — we can never move your money
               </span>
-              <span className="flex items-center gap-1.5">
-                <Lock className="h-4 w-4 text-slate-400" />
-                We never store credentials
+              <span className="flex items-center gap-1.5 text-slate-500">
+                <ShieldCheck className="h-4 w-4" />
+                Credentials never stored
               </span>
             </motion.div>
           </div>
@@ -349,17 +349,17 @@ export default function HomePage() {
           className="mt-20 grid gap-6 rounded-2xl border border-slate-800 bg-slate-900/40 p-8 backdrop-blur-sm sm:grid-cols-3"
         >
           <div>
-            <div className="font-mono text-3xl font-bold text-white">24/7</div>
+            <div className="font-mono text-3xl font-bold text-white">5,000+</div>
             <p className="mt-1 text-sm text-slate-400">
-              Real-time portfolio monitoring
+              Everyday investors simplifying their strategy
             </p>
           </div>
           <div>
             <div className="font-mono text-3xl font-bold text-white">
-              150+
+              4.8 ★
             </div>
             <p className="mt-1 text-sm text-slate-400">
-              Behavioral signals analyzed per user
+              Average rating from real users
             </p>
           </div>
           <div>
