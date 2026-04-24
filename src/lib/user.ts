@@ -17,7 +17,7 @@ interface StoredUser {
   email?: string;
 }
 
-export default function useUser() {
+export function useUser() {
   const [user, setUser] = useState<StoredUser>({ name: "" });
   const [isLoaded, setIsLoaded] = useState(false);
 

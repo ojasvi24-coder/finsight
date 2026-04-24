@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, BarChart3, BookOpen, LogOut, X, UserPlus } from "lucide-react";
 import { motion } from "framer-motion";
-import useUser from "@/app/user/page";
+import { useUser } from "@/lib/user";
 
 interface SidebarProps {
   onNavigate?: () => void;
@@ -117,4 +117,3 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
     </aside>
   );
 }
-

@@ -41,7 +41,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import useUser from "@/app/user/page";
+import { useUser } from "@/lib/user";
 
 type TimeRange = "3M" | "6M" | "12M";
 
@@ -1651,4 +1651,3 @@ function Slider({
     </div>
   );
 }
-

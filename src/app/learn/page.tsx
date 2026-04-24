@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import useUser from "@/app/user/page";
+import { useUser } from "@/lib/user";
 import {
   BookOpen,
   TrendingUp,
@@ -585,6 +585,4 @@ export default function LearnPage() {
     </div>
   );
 }
-
-
 
