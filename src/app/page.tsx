@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useUser } from "@/lib/user";
+import LiveTelemetry from "@/components/LiveTelemetry";
 
 /* ---------- Mini "live" chart preview (inline SVG, no lib needed) ---------- */
 function LiveChartPreview() {
@@ -171,7 +172,6 @@ export default function HomePage() {
   }, []);
 
   // Daily Three — dynamic, would be LLM-generated in production.
-  // These are the three insights every user sees on load.
   const dailyThree = [
     {
       kind: "Action",
@@ -195,6 +195,13 @@ export default function HomePage() {
       href: "/dashboard",
     },
   ];
+
+  // Simulate AI calculation — shows Processing... shimmer for ~500ms
+  const [vectorsLoading, setVectorsLoading] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setVectorsLoading(false), 600);
+    return () => clearTimeout(t);
+  }, []);
 
   const containerVariants: Variants = {
     hidden: { opacity: 0 },
@@ -246,6 +253,8 @@ export default function HomePage() {
             backgroundSize: "48px 48px",
           }}
         />
+        {/* Live telemetry strings — scrolling hex/data feeds */}
+        <LiveTelemetry />
       </div>
 
       <div className="relative z-10 mx-auto max-w-6xl px-6 pt-8 pb-20 sm:px-8">
@@ -327,22 +336,23 @@ export default function HomePage() {
 
             <motion.h1
               variants={itemVariants}
-              className="text-4xl font-bold leading-[1.05] tracking-tight text-white sm:text-5xl lg:text-6xl"
+              className="text-4xl font-semibold leading-[1.05] tracking-tight text-white sm:text-5xl lg:text-6xl"
             >
-              Reduce investment risk by{" "}
+              Engineered for precision.{" "}
               <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
-                up to 20%
-              </span>{" "}
-              with AI-driven portfolio analysis.
+                Optimized for growth.
+              </span>
             </motion.h1>
 
             <motion.p
               variants={itemVariants}
-              className="max-w-xl text-lg leading-relaxed text-slate-400"
+              className="max-w-xl text-base font-normal leading-relaxed text-slate-400 sm:text-lg"
             >
-              FinSight analyzes your spending, holdings, and goals in real time —
-              then tells you exactly what to do next. No dashboards to decode.
-              No jargon. Just decisions.
+              Experience the world's most advanced financial tracking protocol.
+              FinSight deploys predictive AI to stress-test your portfolio in
+              real-time, identifying risks and opportunities before they hit
+              your bottom line. It's not just a tracker; it's an intelligence
+              layer for your entire financial life.
             </motion.p>
 
             <motion.div
@@ -406,7 +416,7 @@ export default function HomePage() {
           </motion.div>
         </motion.div>
 
-        {/* ---------- DAILY THREE ---------- */}
+        {/* ---------- PRIORITY VECTORS ---------- */}
         <motion.section
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -416,26 +426,50 @@ export default function HomePage() {
         >
           <div className="mb-6 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-emerald-400" />
+              <Activity className="h-4 w-4 text-emerald-400" />
               <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-300">
-                Your Daily Three
+                Priority Vectors
               </h2>
+              {vectorsLoading && (
+                <span className="flex items-center gap-1.5 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-cyan-300">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-cyan-400" />
+                  Processing...
+                </span>
+              )}
             </div>
-            <span className="text-xs text-slate-500">Refreshed this morning</span>
+            <span className="font-mono text-[10px] text-slate-500">
+              Δt = {vectorsLoading ? "…" : "0.6s"} · model v4.2
+            </span>
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
             {dailyThree.map((item, i) => {
               const Icon = item.icon;
+              if (vectorsLoading) {
+                return (
+                  <div
+                    key={item.kind}
+                    className="h-[120px] animate-pulse overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 p-5 backdrop-blur-sm"
+                  >
+                    <div className="mb-3 flex items-center justify-between">
+                      <div className="h-4 w-16 rounded-full bg-slate-800" />
+                      <div className="h-3.5 w-3.5 rounded bg-slate-800" />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="h-2.5 w-full rounded bg-slate-800" />
+                      <div className="h-2.5 w-4/5 rounded bg-slate-800" />
+                    </div>
+                  </div>
+                );
+              }
               return (
                 <Link key={item.kind} href={item.href}>
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ duration: 0.4, delay: i * 0.1 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, delay: i * 0.08 }}
                     whileHover={{ y: -3 }}
-                    className="group h-full cursor-pointer rounded-2xl border border-slate-800 bg-slate-900/50 p-5 backdrop-blur-sm transition-colors hover:border-slate-700"
+                    className="group h-full cursor-pointer rounded-2xl border border-slate-800 bg-slate-900/50 p-5 backdrop-blur-sm transition-all hover:border-slate-700 hover:shadow-[0_0_25px_-10px_rgba(16,185,129,0.5)]"
                   >
                     <div className="mb-3 flex items-center justify-between">
                       <span
@@ -538,4 +572,3 @@ export default function HomePage() {
     </div>
   );
 }
-

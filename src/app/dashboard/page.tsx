@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
   TrendingUp,
   TrendingDown,
@@ -28,6 +29,7 @@ import {
   HelpCircle,
   ArrowRight,
   AlertTriangle,
+  Activity,
 } from "lucide-react";
 import {
   LineChart,
@@ -42,6 +44,11 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { useUser } from "@/lib/user";
+import MarketPulse from "@/components/MarketPulse";
+import AnimatedNumber from "@/components/AnimatedNumber";
+
+// Opt out of static prerendering — useSearchParams requires dynamic rendering.
+export const dynamic = "force-dynamic";
 
 type TimeRange = "3M" | "6M" | "12M";
 
@@ -222,9 +229,12 @@ function syntheticSparkline(changePct: number, seed = 10): number[] {
 /* ============================================================
    MAIN DASHBOARD
    ============================================================ */
-export default function MergedFinancialDashboard() {
-  const { firstName, hasProfile, name: userName, updateUser } = useUser();
+function MergedFinancialDashboard() {
+  const { firstName, hasProfile, name: userName, email: userEmail, updateUser } = useUser();
   const [nameDraft, setNameDraft] = useState("");
+  const [emailDraft, setEmailDraft] = useState("");
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
   const [showBalance, setShowBalance] = useState(true);
   const [isClient, setIsClient] = useState(false);
@@ -258,9 +268,9 @@ export default function MergedFinancialDashboard() {
   const [simulatedSavingsGoal, setSimulatedSavingsGoal] = useState(0);
   const [marketData, setMarketData] = useState<MarketAsset[]>([]);
   const [isLoadingMarket, setIsLoadingMarket] = useState(true);
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const transactionFormRef = useRef<HTMLDivElement>(null);
   const aiModelerRef = useRef<HTMLDivElement>(null);
+  const wealthProjectionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setIsClient(true);
@@ -269,10 +279,21 @@ export default function MergedFinancialDashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  // Sync the settings draft with the stored name whenever it loads
+  // Legacy redirect: ?settings=open now opens the global profile modal instead
+  useEffect(() => {
+    if (searchParams?.get("settings") === "open") {
+      router.replace("/dashboard?profile=open", { scroll: false });
+    }
+  }, [searchParams, router]);
+
+  // Sync the settings drafts with the stored profile whenever it loads
   useEffect(() => {
     setNameDraft(userName);
   }, [userName]);
+
+  useEffect(() => {
+    setEmailDraft(userEmail);
+  }, [userEmail]);
 
   const fetchLiveMarket = async () => {
     setIsLoadingMarket(true);
@@ -371,15 +392,37 @@ export default function MergedFinancialDashboard() {
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
     let balance = initialInvestment;
     const monthlyNetFlow = netCashFlow / months.length;
-    return months.map((month) => {
+
+    // Historical months — actual balance, no aiPath
+    const historical = months.map((month) => {
       balance += monthlyNetFlow;
       return {
         month,
         balance: Math.round(balance),
+        aiPath: null as number | null,
         spending: Math.round(totalExpenses / months.length),
       };
     });
-  }, [initialInvestment, netCashFlow, totalExpenses]);
+
+    // AI Probabilistic Path — next 30 days (1 month) forward projection
+    // Uses current savings trajectory + expected return, with a small uncertainty band
+    const monthlyReturn = annualReturn / 100 / 12;
+    const projectedNext = balance * (1 + monthlyReturn) + monthlyNetFlow;
+
+    // Overlap the current month with aiPath so the dotted line visually connects
+    const lastHistorical = historical[historical.length - 1];
+    lastHistorical.aiPath = lastHistorical.balance;
+
+    return [
+      ...historical,
+      {
+        month: "Jul (AI)",
+        balance: null as any,
+        aiPath: Math.round(projectedNext),
+        spending: 0,
+      },
+    ];
+  }, [initialInvestment, netCashFlow, totalExpenses, annualReturn]);
 
   const compoundData = useMemo(() => {
     const data = [];
@@ -393,6 +436,13 @@ export default function MergedFinancialDashboard() {
   const investmentTarget = useMemo(() => {
     return Math.round(currentBalance * 1.25);
   }, [currentBalance]);
+
+  // Real YTD portfolio growth: actual delta over initial capital.
+  // Reacts live when the user edits income, expenses, or initial investment.
+  const portfolioGrowthPct = useMemo(() => {
+    if (initialInvestment === 0) return 0;
+    return ((currentBalance - initialInvestment) / initialInvestment) * 100;
+  }, [currentBalance, initialInvestment]);
 
   const monthlySavings = netCashFlow;
 
@@ -551,6 +601,11 @@ export default function MergedFinancialDashboard() {
     transactionFormRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  // Open the global Profile modal from anywhere in the dashboard
+  const openProfileModal = () => {
+    router.push("/dashboard?profile=open");
+  };
+
   // Click target for the "Simulate changes" arrow on the Top Insight card.
   // Opens the AI modeler (if closed) and scrolls it into view.
   const handleSimulateChangesClick = () => {
@@ -659,7 +714,7 @@ export default function MergedFinancialDashboard() {
               </div>
             </div>
             <button
-              onClick={() => setShowSettingsModal(true)}
+              onClick={() => openProfileModal()}
               className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400"
             >
               Set up profile
@@ -775,7 +830,11 @@ export default function MergedFinancialDashboard() {
             {/* HERO NUMBER */}
             <div className="mt-3">
               <div className="font-mono text-5xl font-bold tracking-tight text-white sm:text-6xl">
-                {showBalance ? `$${currentBalance.toLocaleString()}` : "••••••"}
+                {showBalance ? (
+                  <AnimatedNumber value={currentBalance} prefix="$" duration={800} />
+                ) : (
+                  "••••••"
+                )}
               </div>
               {/* Daily Impact — narrative "so what?" line */}
               <div
@@ -872,11 +931,11 @@ export default function MergedFinancialDashboard() {
           animate="visible"
           className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
         >
-          {/* Avg Monthly Spending */}
+          {/* Capital Outflow (formerly Avg Monthly Spending) */}
           <motion.div variants={itemVariants} className={`${cardBase} p-5`}>
             <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-slate-400">
               <Target className="h-4 w-4 text-slate-500" />
-              Avg Monthly Spending
+              Capital Outflow · Monthly
             </div>
             <div className="font-mono text-2xl font-bold text-white">
               ${Math.round(avgMonthlySpending).toLocaleString()}
@@ -912,20 +971,38 @@ export default function MergedFinancialDashboard() {
             </p>
           </motion.div>
 
-          {/* Investment Growth */}
-          <motion.div variants={itemVariants} className={`${cardBase} p-5`}>
-            <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-slate-400">
-              <ArrowUpRight className="h-4 w-4 text-slate-500" />
-              Est. Investment Growth
+          {/* Investment Growth — shows ACTUAL computed balance change */}
+          <motion.button
+            variants={itemVariants}
+            onClick={() => {
+              wealthProjectionRef.current?.scrollIntoView({
+                behavior: "smooth",
+                block: "start",
+              });
+            }}
+            className={`${cardBase} group p-5 text-left transition-all hover:border-emerald-500/30 hover:shadow-[0_0_25px_-10px_rgba(16,185,129,0.5)]`}
+            aria-label="Open wealth projection simulator"
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-slate-400">
+                <ArrowUpRight className="h-4 w-4 text-slate-500" />
+                Portfolio Growth
+              </div>
+              <ArrowRight className="h-4 w-4 text-slate-600 transition-all group-hover:translate-x-0.5 group-hover:text-emerald-400" />
             </div>
-            <div className="font-mono text-2xl font-bold text-emerald-400">
-              +{annualReturn}%
+            <div
+              className={`font-mono text-2xl font-bold ${
+                portfolioGrowthPct >= 0 ? "text-emerald-400" : "text-rose-400"
+              }`}
+            >
+              {portfolioGrowthPct >= 0 ? "+" : ""}
+              {portfolioGrowthPct.toFixed(2)}%
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              ${currentBalance.toLocaleString()} → $
-              {investmentTarget.toLocaleString()} target
+              {portfolioGrowthPct >= 0 ? "+" : "-"}$
+              {Math.abs(currentBalance - initialInvestment).toLocaleString()} · tap to simulate
             </p>
-          </motion.div>
+          </motion.button>
         </motion.div>
 
         {/* ---------- MAIN GRID: Charts + Sidebar ---------- */}
@@ -940,9 +1017,9 @@ export default function MergedFinancialDashboard() {
               className={`${cardBase} p-6`}
             >
               <div className="mb-5">
-                <h2 className="text-lg font-bold text-white">Net Worth Trend</h2>
+                <h2 className="text-lg font-bold text-white">Asset Architecture</h2>
                 <p className="text-xs text-slate-500">
-                  6-month projection and growth tracking
+                  6-month historical path with AI probabilistic projection
                 </p>
               </div>
               <div className="h-[280px] w-full">
@@ -978,6 +1055,18 @@ export default function MergedFinancialDashboard() {
                       activeDot={{ r: 6, fill: "#10b981", stroke: "#020617", strokeWidth: 2 }}
                       strokeWidth={2.5}
                       name="Balance"
+                      connectNulls={false}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="aiPath"
+                      stroke="#06b6d4"
+                      strokeWidth={2.5}
+                      strokeDasharray="6 4"
+                      dot={{ fill: "#06b6d4", r: 3 }}
+                      activeDot={{ r: 5, fill: "#06b6d4", stroke: "#020617", strokeWidth: 2 }}
+                      name="AI Probabilistic Path"
+                      connectNulls={true}
                     />
                   </LineChart>
                 </ResponsiveContainer>
@@ -989,6 +1078,7 @@ export default function MergedFinancialDashboard() {
 
             {/* Wealth Projection */}
             <motion.section
+              ref={wealthProjectionRef}
               variants={itemVariants}
               initial="hidden"
               animate="visible"
@@ -1261,6 +1351,98 @@ export default function MergedFinancialDashboard() {
           </aside>
         </div>
 
+        {/* ---------- MARKET PULSE (Fear / Greed) ---------- */}
+        <motion.section
+          initial={{ opacity: 0, y: 12 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.45 }}
+          className={`${cardBase} p-6`}
+        >
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h2 className="flex items-center gap-2 text-lg font-bold text-white">
+                <Activity className="h-4 w-4 text-slate-400" />
+                Market Pulse
+              </h2>
+              <p className="text-xs text-slate-500">
+                Crowd sentiment from price action across major assets
+              </p>
+            </div>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              Updated now
+            </span>
+          </div>
+          <FearGreedMeter marketData={marketData} />
+        </motion.section>
+
+        {/* ---------- RISK HEATMAP + MARKET PULSE + SCENARIO SLIDER ---------- */}
+        <div className="grid gap-5 lg:grid-cols-6">
+          {/* Risk Heatmap */}
+          <motion.section
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.45 }}
+            className={`${cardBase} p-6 lg:col-span-3`}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-white">Portfolio Risk Map</h2>
+                <p className="text-xs text-slate-500">
+                  Sectors colored by volatility — darker red = higher risk today
+                </p>
+              </div>
+              <Link
+                href="/learn/the-art-of-asset-allocation"
+                className="flex items-center gap-1 text-xs font-semibold text-emerald-400 hover:text-emerald-300"
+              >
+                Manage risk
+                <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
+            <RiskHeatmap />
+          </motion.section>
+
+          {/* Market Pulse — Fear/Greed sentiment gauge */}
+          <motion.section
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.45, delay: 0.08 }}
+            className={`${cardBase} flex flex-col items-center justify-center p-6 lg:col-span-1`}
+          >
+            <MarketPulse />
+            <p className="mt-3 text-center text-[11px] leading-relaxed text-slate-500">
+              Aggregate sentiment from volatility, momentum, and flow data.
+            </p>
+          </motion.section>
+
+          {/* What-If Scenario Slider */}
+          <motion.section
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.45, delay: 0.15 }}
+            className={`${cardBase} p-6 lg:col-span-2`}
+          >
+            <div className="mb-4">
+              <h2 className="flex items-center gap-2 text-lg font-bold text-white">
+                <Filter className="h-4 w-4 text-slate-400" />
+                What-If Scenario
+              </h2>
+              <p className="text-xs text-slate-500">
+                Turn the dashboard into a windshield.
+              </p>
+            </div>
+            <ScenarioSlider
+              currentBalance={currentBalance}
+              currentMonthlySavings={monthlySavings}
+              annualReturn={annualReturn}
+            />
+          </motion.section>
+        </div>
+
         {/* ---------- EXPENSES + QUICK ACTIONS ---------- */}
         <motion.div
           variants={itemVariants}
@@ -1274,16 +1456,16 @@ export default function MergedFinancialDashboard() {
             className={`${cardBase} p-6 lg:col-span-2`}
           >
             <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-white">Recent Expenses</h2>
+              <h2 className="text-lg font-bold text-white">Ledger Events</h2>
               <span className="text-xs text-slate-500">
-                {transactions.length} items · ${totalExpenses.toLocaleString()}
+                {transactions.length} events · ${totalExpenses.toLocaleString()}
               </span>
             </div>
 
             {/* Add form */}
             <div className="mb-6 rounded-lg border border-slate-800 bg-slate-950/40 p-4">
               <h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400">
-                <Plus className="h-3.5 w-3.5" /> Add Expense
+                <Plus className="h-3.5 w-3.5" /> Add Ledger Event
               </h3>
               <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
                 <input
@@ -1428,7 +1610,7 @@ export default function MergedFinancialDashboard() {
 
               <motion.button
                 whileHover={{ x: 2 }}
-                onClick={() => setShowSettingsModal(true)}
+                onClick={() => openProfileModal()}
                 className="group flex w-full items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-700 hover:bg-slate-900"
               >
                 <span className="flex items-center gap-2">
@@ -1457,126 +1639,6 @@ export default function MergedFinancialDashboard() {
             </div>
           </div>
         </motion.div>
-
-        {/* ---------- SETTINGS MODAL ---------- */}
-        <AnimatePresence>
-          {showSettingsModal && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-              onClick={() => setShowSettingsModal(false)}
-            >
-              <motion.div
-                initial={{ scale: 0.96, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.96, opacity: 0 }}
-                onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-md rounded-2xl border border-slate-800 bg-[#1E1E2E] p-6 shadow-2xl"
-              >
-                <div className="mb-5 flex items-center justify-between">
-                  <h2 className="text-lg font-bold text-white">Settings</h2>
-                  <motion.button
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
-                    onClick={() => setShowSettingsModal(false)}
-                    className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
-                    aria-label="Close settings"
-                  >
-                    <X className="h-5 w-5" />
-                  </motion.button>
-                </div>
-
-                <div className="space-y-4">
-                  {/* Profile — the Anti-Jordan fix */}
-                  <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-4">
-                    <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">
-                      Your Profile
-                    </h3>
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                        Your Name
-                      </label>
-                      <input
-                        type="text"
-                        value={nameDraft}
-                        onChange={(e) => setNameDraft(e.target.value)}
-                        placeholder="e.g. Alex Morgan"
-                        className="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3.5 py-2.5 text-sm text-white outline-none transition-colors focus:border-emerald-500/50"
-                      />
-                      <p className="pt-1 text-[11px] text-slate-500">
-                        We use this for your greeting and avatar initials. Stored locally on this device.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-4">
-                    <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">
-                      Dashboard Settings
-                    </h3>
-
-                    <div className="space-y-3">
-                      <label className="flex cursor-pointer items-center gap-3">
-                        <input
-                          type="checkbox"
-                          checked={showBalance}
-                          onChange={(e) => setShowBalance(e.target.checked)}
-                          className="h-4 w-4 rounded border-slate-600 text-emerald-500 focus:ring-emerald-500"
-                        />
-                        <span className="text-sm text-slate-300">
-                          Show balance on hero card
-                        </span>
-                      </label>
-
-                      <div className="border-t border-slate-800 pt-3">
-                        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                          Default Return Rate
-                        </p>
-                        <Slider
-                          label=""
-                          val={annualReturn}
-                          sym="%"
-                          min={1}
-                          max={15}
-                          step={0.5}
-                          onChange={setAnnualReturn}
-                        />
-                      </div>
-
-                      <div className="border-t border-slate-800 pt-3">
-                        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                          Projection Years
-                        </p>
-                        <Slider
-                          label=""
-                          val={years}
-                          sym=""
-                          min={5}
-                          max={50}
-                          step={1}
-                          onChange={setYears}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <motion.button
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.99 }}
-                    onClick={() => {
-                      updateUser({ name: nameDraft.trim() });
-                      setShowSettingsModal(false);
-                    }}
-                    className="w-full rounded-lg bg-emerald-500 py-3 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400"
-                  >
-                    Save Settings
-                  </motion.button>
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
 
         {/* ---------- BOTTOM CTA ---------- */}
         <motion.div
@@ -1651,3 +1713,404 @@ function Slider({
     </div>
   );
 }
+
+/* ============================================================
+   Risk Heatmap — portfolio sector volatility grid
+   ============================================================ */
+function RiskHeatmap() {
+  // In production, derive these from real portfolio allocation + market data.
+  const sectors = [
+    { name: "Tech", weight: 28, risk: 72, change: -1.2 },
+    { name: "Finance", weight: 18, risk: 45, change: 0.3 },
+    { name: "Healthcare", weight: 14, risk: 32, change: 0.8 },
+    { name: "Energy", weight: 10, risk: 68, change: -2.1 },
+    { name: "Consumer", weight: 12, risk: 28, change: 0.5 },
+    { name: "Industrials", weight: 8, risk: 38, change: 0.1 },
+    { name: "Real Estate", weight: 6, risk: 52, change: -0.4 },
+    { name: "Bonds", weight: 4, risk: 12, change: 0.2 },
+  ];
+
+  // Risk → color: green (low) → amber (med) → red (high)
+  const riskColor = (risk: number) => {
+    if (risk < 30) return "bg-emerald-500/70";
+    if (risk < 50) return "bg-emerald-600/60";
+    if (risk < 65) return "bg-amber-500/70";
+    if (risk < 75) return "bg-orange-500/75";
+    return "bg-rose-500/80";
+  };
+
+  const riskLabel = (risk: number) => {
+    if (risk < 30) return "Low";
+    if (risk < 50) return "Moderate";
+    if (risk < 65) return "Elevated";
+    return "High";
+  };
+
+  return (
+    <div>
+      <div className="grid grid-cols-4 gap-2">
+        {sectors.map((s) => {
+          const positive = s.change >= 0;
+          return (
+            <div
+              key={s.name}
+              className={`group relative flex flex-col justify-between overflow-hidden rounded-lg border border-slate-800 p-3 transition-transform hover:scale-[1.02] ${riskColor(
+                s.risk
+              )}`}
+              title={`${s.name}: ${riskLabel(s.risk)} risk · ${s.weight}% of portfolio`}
+            >
+              <div className="absolute inset-0 bg-slate-950/55" />
+              <div className="relative">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-200/90">
+                  {s.name}
+                </div>
+                <div className="mt-0.5 font-mono text-sm font-bold text-white">
+                  {s.weight}%
+                </div>
+              </div>
+              <div className="relative mt-2 flex items-center justify-between">
+                <span className="text-[10px] font-semibold text-slate-100/80">
+                  {riskLabel(s.risk)}
+                </span>
+                <span
+                  className={`text-[10px] font-bold ${
+                    positive ? "text-emerald-300" : "text-rose-300"
+                  }`}
+                >
+                  {positive ? "+" : ""}
+                  {s.change.toFixed(1)}%
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Legend */}
+      <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-800 pt-3 text-[10px] text-slate-400">
+        <span className="font-semibold uppercase tracking-wider">Risk scale</span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm bg-emerald-500/70" /> Low
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm bg-amber-500/70" /> Moderate
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm bg-orange-500/75" /> Elevated
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm bg-rose-500/80" /> High
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   Scenario Slider — "If I invest $X more/month, when do I hit $Y?"
+   ============================================================ */
+function ScenarioSlider({
+  currentBalance,
+  currentMonthlySavings,
+  annualReturn,
+}: {
+  currentBalance: number;
+  currentMonthlySavings: number;
+  annualReturn: number;
+}) {
+  const [extra, setExtra] = useState(500);
+  const [goal, setGoal] = useState(100000);
+
+  // Solve for number of months with monthly compounding.
+  // FV = PV*(1+r)^n + PMT*[((1+r)^n - 1)/r]
+  // We just iterate — simpler, and the numbers are small.
+  const { monthsToGoal, totalContribution, gained } = (() => {
+    const r = annualReturn / 100 / 12;
+    const pmt = currentMonthlySavings + extra;
+    let balance = currentBalance;
+    let months = 0;
+    const cap = 12 * 80; // 80 year sanity cap
+    if (balance >= goal) {
+      return { monthsToGoal: 0, totalContribution: 0, gained: 0 };
+    }
+    while (balance < goal && months < cap) {
+      balance = balance * (1 + r) + pmt;
+      months++;
+    }
+    const reached = months < cap;
+    return {
+      monthsToGoal: reached ? months : Infinity,
+      totalContribution: pmt * months,
+      gained: balance - (currentBalance + pmt * months),
+    };
+  })();
+
+  const years = monthsToGoal / 12;
+  const displayTime = !isFinite(monthsToGoal)
+    ? "80+ years"
+    : years >= 1
+    ? `${years.toFixed(1)} years`
+    : `${monthsToGoal} months`;
+
+  return (
+    <div className="space-y-5">
+      <Slider
+        label="Extra monthly contribution"
+        val={extra}
+        sym="$"
+        min={0}
+        max={3000}
+        step={50}
+        onChange={setExtra}
+      />
+      <Slider
+        label="Your goal"
+        val={goal}
+        sym="$"
+        min={10000}
+        max={2000000}
+        step={5000}
+        onChange={setGoal}
+      />
+
+      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-emerald-300">
+          You'd hit your goal in
+        </div>
+        <div className="mt-1 font-mono text-2xl font-bold text-white">
+          {displayTime}
+        </div>
+        {isFinite(monthsToGoal) && (
+          <p className="mt-2 text-xs leading-relaxed text-slate-300">
+            Saving{" "}
+            <span className="font-bold text-emerald-400">
+              ${(currentMonthlySavings + extra).toLocaleString()}
+            </span>{" "}
+            /month at {annualReturn}% return. Investment gains of{" "}
+            <span className="font-bold text-emerald-400">
+              ${Math.max(0, Math.round(gained)).toLocaleString()}
+            </span>{" "}
+            come from compounding.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   Suspense wrapper — required because MergedFinancialDashboard
+   calls useSearchParams() to handle ?profile=open deep links.
+   Next.js 16 refuses to prerender components using that hook
+   without a parent Suspense boundary.
+   ============================================================ */
+export default function DashboardPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-950">
+          <div className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 sm:py-10">
+            <div className="h-8 w-48 animate-pulse rounded bg-slate-800/60" />
+            <div className="h-40 animate-pulse rounded-2xl border border-slate-800 bg-slate-900/40" />
+            <div className="grid gap-5 sm:grid-cols-3">
+              <div className="h-24 animate-pulse rounded-2xl border border-slate-800 bg-slate-900/40" />
+              <div className="h-24 animate-pulse rounded-2xl border border-slate-800 bg-slate-900/40" />
+              <div className="h-24 animate-pulse rounded-2xl border border-slate-800 bg-slate-900/40" />
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <MergedFinancialDashboard />
+    </Suspense>
+  );
+}
+
+/* ============================================================
+   Fear & Greed Meter — glowing neon needle on a semicircle
+   ============================================================ */
+function FearGreedMeter({ marketData }: { marketData: any[] }) {
+  // Compute sentiment from average 24h change across tracked markets.
+  // Scale roughly: +3% avg → 90 (extreme greed), 0% → 50 (neutral), -3% → 10 (extreme fear)
+  const avgChange =
+    marketData.length > 0
+      ? marketData.reduce((s, m) => s + (m.change || 0), 0) / marketData.length
+      : 0;
+  const score = Math.max(0, Math.min(100, 50 + avgChange * 13));
+
+  const label =
+    score < 25
+      ? "Extreme Fear"
+      : score < 45
+      ? "Fear"
+      : score < 55
+      ? "Neutral"
+      : score < 75
+      ? "Greed"
+      : "Extreme Greed";
+
+  const color =
+    score < 25
+      ? "#f43f5e"
+      : score < 45
+      ? "#f97316"
+      : score < 55
+      ? "#eab308"
+      : score < 75
+      ? "#10b981"
+      : "#22c55e";
+
+  // Semicircle from 180° (left) to 0° (right), needle angle based on score
+  const angle = 180 - (score / 100) * 180;
+  const rad = (angle * Math.PI) / 180;
+  const cx = 120;
+  const cy = 100;
+  const r = 80;
+  const needleX = cx + Math.cos(rad) * r;
+  const needleY = cy - Math.sin(rad) * r;
+
+  // Build arc segments for the colored gauge
+  const segments = [
+    { from: 180, to: 144, color: "#f43f5e" },
+    { from: 144, to: 108, color: "#f97316" },
+    { from: 108, to: 72, color: "#eab308" },
+    { from: 72, to: 36, color: "#10b981" },
+    { from: 36, to: 0, color: "#22c55e" },
+  ];
+
+  const arcPath = (from: number, to: number, radius: number) => {
+    const f = (from * Math.PI) / 180;
+    const t = (to * Math.PI) / 180;
+    const x1 = cx + Math.cos(f) * radius;
+    const y1 = cy - Math.sin(f) * radius;
+    const x2 = cx + Math.cos(t) * radius;
+    const y2 = cy - Math.sin(t) * radius;
+    return `M ${x1} ${y1} A ${radius} ${radius} 0 0 1 ${x2} ${y2}`;
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="relative">
+        <svg viewBox="0 0 240 130" width="240" height="130">
+          <defs>
+            <filter id="glow">
+              <feGaussianBlur stdDeviation="2.5" result="coloredBlur" />
+              <feMerge>
+                <feMergeNode in="coloredBlur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+
+          {/* Background arc */}
+          {segments.map((seg, i) => (
+            <path
+              key={i}
+              d={arcPath(seg.from, seg.to, r)}
+              stroke={seg.color}
+              strokeOpacity={0.25}
+              strokeWidth={14}
+              fill="none"
+              strokeLinecap="butt"
+            />
+          ))}
+
+          {/* Active segment up to the needle */}
+          {segments.map((seg, i) => {
+            if (seg.to > angle) return null;
+            const startAngle = seg.from < angle ? angle : seg.from;
+            return (
+              <path
+                key={`a-${i}`}
+                d={arcPath(startAngle, seg.to, r)}
+                stroke={seg.color}
+                strokeWidth={14}
+                fill="none"
+                strokeLinecap="butt"
+                filter="url(#glow)"
+                opacity={0.95}
+              />
+            );
+          })}
+
+          {/* Tick marks */}
+          {[0, 25, 50, 75, 100].map((val) => {
+            const a = ((180 - (val / 100) * 180) * Math.PI) / 180;
+            const x1 = cx + Math.cos(a) * (r - 12);
+            const y1 = cy - Math.sin(a) * (r - 12);
+            const x2 = cx + Math.cos(a) * (r - 20);
+            const y2 = cy - Math.sin(a) * (r - 20);
+            return (
+              <line
+                key={val}
+                x1={x1}
+                y1={y1}
+                x2={x2}
+                y2={y2}
+                stroke="#475569"
+                strokeWidth={1.5}
+              />
+            );
+          })}
+
+          {/* Needle with glow */}
+          <motion.line
+            x1={cx}
+            y1={cy}
+            x2={needleX}
+            y2={needleY}
+            stroke={color}
+            strokeWidth={3}
+            strokeLinecap="round"
+            filter="url(#glow)"
+            initial={{ pathLength: 0 }}
+            animate={{ pathLength: 1 }}
+            transition={{ duration: 0.9, ease: "easeOut" }}
+          />
+          <circle
+            cx={cx}
+            cy={cy}
+            r={6}
+            fill={color}
+            filter="url(#glow)"
+          />
+          <circle cx={cx} cy={cy} r={3} fill="#020617" />
+
+          {/* Scale labels */}
+          <text x={cx - r} y={cy + 20} fontSize={8} fill="#64748b" textAnchor="middle">
+            Fear
+          </text>
+          <text x={cx} y={cy - r - 6} fontSize={8} fill="#64748b" textAnchor="middle">
+            Neutral
+          </text>
+          <text x={cx + r} y={cy + 20} fontSize={8} fill="#64748b" textAnchor="middle">
+            Greed
+          </text>
+        </svg>
+      </div>
+
+      <div className="text-center sm:text-right">
+        <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+          Sentiment Score
+        </div>
+        <div
+          className="mt-1 font-mono text-4xl font-bold"
+          style={{ color, textShadow: `0 0 20px ${color}66` }}
+        >
+          {Math.round(score)}
+        </div>
+        <div
+          className="mt-1 text-xs font-bold uppercase tracking-wider"
+          style={{ color }}
+        >
+          {label}
+        </div>
+        <div className="mt-2 text-[11px] text-slate-400">
+          Avg 24h: {avgChange >= 0 ? "+" : ""}
+          {avgChange.toFixed(2)}%
+        </div>
+      </div>
+    </div>
+  );
+}
+

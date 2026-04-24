@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   Home,
   BarChart3,
@@ -9,7 +9,6 @@ import {
   LogOut,
   LogIn,
   X,
-  UserPlus,
   Settings,
 } from "lucide-react";
 import { motion } from "framer-motion";
@@ -19,10 +18,7 @@ interface SidebarProps {
   onNavigate?: () => void;
 }
 
-/**
- * Status dot colors per nav item. In production you'd derive these
- * from real metrics (budget burn, portfolio drift, goal progress).
- */
+/** Status dot colors per nav item. Derive these from real metrics later. */
 const navStatus: Record<string, { color: string; label: string } | undefined> =
   {
     "/dashboard": { color: "bg-emerald-400", label: "On track" },
@@ -32,25 +28,32 @@ const navStatus: Record<string, { color: string; label: string } | undefined> =
 export default function Sidebar({ onNavigate }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { firstName, initials, hasProfile, email, updateUser } = useUser();
 
   const menuItems = [
     { name: "Home", path: "/", icon: Home },
     { name: "Dashboard", path: "/dashboard", icon: BarChart3 },
-    { name: "Guide", path: "/learn", icon: BookOpen },
+    { name: "System Protocol", path: "/learn", icon: BookOpen },
   ];
 
   const handleLinkClick = () => {
     if (onNavigate) onNavigate();
   };
 
-  // Open the dashboard Settings modal by navigating with ?settings=open.
-  const openSettings = () => {
+  /**
+   * Open the global Profile modal by adding ?profile=open to the current URL.
+   * Works from any page — the modal is mounted globally in ClientLayout.
+   */
+  const openProfile = () => {
     handleLinkClick();
-    router.push("/dashboard?settings=open");
+    const current = new URLSearchParams(
+      Array.from(searchParams?.entries() ?? [])
+    );
+    current.set("profile", "open");
+    router.push(`${pathname}?${current.toString()}`);
   };
 
-  // Sign-out clears the user profile from localStorage and sends them home.
   const handleSignOut = () => {
     updateUser({ name: "", email: "" });
     handleLinkClick();
@@ -88,14 +91,13 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
                   whileTap={{ scale: 0.97 }}
                   className={`flex items-center gap-3.5 rounded-lg px-3.5 py-2.5 text-sm transition-colors ${
                     isActive
-                      ? "border border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                      ? "border border-emerald-500/20 bg-emerald-500/10 text-emerald-300 shadow-[0_0_20px_-10px_rgba(16,185,129,0.6)]"
                       : "border border-transparent text-slate-400 hover:bg-slate-900 hover:text-slate-100"
                   }`}
                 >
                   <Icon className="h-[18px] w-[18px]" />
                   <span className="flex-1 font-medium">{item.name}</span>
 
-                  {/* Status micro-dot */}
                   {status && (
                     <span
                       className="relative flex h-2 w-2 flex-shrink-0"
@@ -115,9 +117,9 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
             );
           })}
 
-          {/* Settings — opens the dashboard modal via query param */}
+          {/* Settings — opens the global Profile modal */}
           <button
-            onClick={openSettings}
+            onClick={openProfile}
             className="flex w-full items-center gap-3.5 rounded-lg border border-transparent px-3.5 py-2.5 text-sm text-slate-400 transition-colors hover:bg-slate-900 hover:text-slate-100"
           >
             <Settings className="h-[18px] w-[18px]" />
@@ -126,7 +128,7 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
         </nav>
       </div>
 
-      {/* Bottom Section — profile + auth button */}
+      {/* Bottom Section — auth */}
       <div className="space-y-3">
         {hasProfile ? (
           <>
@@ -149,38 +151,22 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
 
             <button
               onClick={handleSignOut}
-              className="group flex w-full items-center gap-3.5 rounded-lg border border-transparent px-3.5 py-2.5 text-sm text-slate-400 transition-colors hover:border-slate-700 hover:bg-slate-900 hover:text-slate-100"
+              className="group flex w-full items-center gap-3.5 rounded-lg border border-transparent px-3.5 py-2.5 text-sm text-slate-400 transition-colors hover:border-rose-500/20 hover:bg-rose-500/5 hover:text-rose-300"
+              aria-label="Sign out"
             >
               <LogOut className="h-[18px] w-[18px] transition-transform group-hover:-translate-x-0.5" />
-              <span className="font-medium">Sign out</span>
+              <span className="font-medium">Log out</span>
             </button>
           </>
         ) : (
-          <>
-            <button onClick={openSettings} className="w-full text-left">
-              <div className="flex items-center gap-3 rounded-lg border border-dashed border-slate-700 bg-slate-900/30 p-3 transition-colors hover:border-slate-600 hover:bg-slate-900/60">
-                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-slate-800 text-slate-400">
-                  <UserPlus className="h-4 w-4" />
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-semibold text-slate-300">
-                    Set your name
-                  </p>
-                  <p className="truncate text-[11px] text-slate-500">
-                    Opens Settings
-                  </p>
-                </div>
-              </div>
-            </button>
-
-            <button
-              onClick={openSettings}
-              className="group flex w-full items-center gap-3.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2.5 text-sm font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/20"
-            >
-              <LogIn className="h-[18px] w-[18px] transition-transform group-hover:translate-x-0.5" />
-              <span>Log in</span>
-            </button>
-          </>
+          // Only a single Log In button when signed out — no "Set your name" strip
+          <button
+            onClick={openProfile}
+            className="group flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-3 text-sm font-semibold text-emerald-300 transition-all hover:bg-emerald-500/20 hover:shadow-[0_0_20px_-5px_rgba(16,185,129,0.5)]"
+          >
+            <LogIn className="h-[18px] w-[18px] transition-transform group-hover:translate-x-0.5" />
+            <span>Initialize Operator ID</span>
+          </button>
         )}
       </div>
     </aside>

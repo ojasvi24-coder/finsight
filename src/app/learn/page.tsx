@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useUser } from "@/lib/user";
+import GuideTerminal from "@/components/GuideTerminal";
 import {
   BookOpen,
   TrendingUp,
@@ -247,16 +248,35 @@ export default function LearnPage() {
           className="mb-10"
         >
           <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
-            Your Guide
+            System Protocol
           </span>
           <h1 className="mt-1.5 text-3xl font-bold tracking-tight text-white sm:text-4xl">
-            Learn while you earn.
+            The operator's manual.
           </h1>
           <p className="mt-2 max-w-2xl text-base text-slate-400">
-            Short, plain-English lessons tied to the exact numbers you see on
-            your dashboard. No homework — just enough to make your next decision.
+            Plain-English documentation for every system the platform runs.
+            Query the protocol directly in the terminal below, or browse
+            lessons tied to the numbers on your dashboard.
           </p>
         </motion.header>
+
+        {/* ---------- INTERACTIVE TERMINAL ---------- */}
+        <motion.section
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="mb-12"
+        >
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-300">
+              Query the Protocol
+            </h2>
+            <span className="font-mono text-[10px] text-slate-500">
+              Interactive · Read-only
+            </span>
+          </div>
+          <GuideTerminal />
+        </motion.section>
 
         {/* ---------- EARN-TO-LEARN POINTS BAR ---------- */}
         <motion.section

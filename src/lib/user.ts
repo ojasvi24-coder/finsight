@@ -5,9 +5,6 @@ import { useState, useEffect, useCallback } from "react";
 /**
  * Lightweight user profile hook — persists to localStorage.
  * Swap this with real auth later by replacing the read/write calls.
- *
- * Usage:
- *   const { name, firstName, initials, isLoaded, hasProfile, updateUser } = useUser();
  */
 
 const STORAGE_KEY = "finsight.user.v1";
@@ -71,3 +68,4 @@ export function useUser() {
     updateUser,
   };
 }
+
