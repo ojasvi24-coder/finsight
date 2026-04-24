@@ -18,8 +18,7 @@ interface AnimatedNumberProps {
 
 /**
  * Odometer-style animated number. Tweens from the previous value to the
- * current one using requestAnimationFrame + an easing function. Locale-aware
- * formatting so you get commas in $52,480 not $52480.
+ * current one using requestAnimationFrame + an easing function.
  */
 export default function AnimatedNumber({
   value,
@@ -30,8 +29,8 @@ export default function AnimatedNumber({
   className,
 }: AnimatedNumberProps) {
   const [display, setDisplay] = useState(value);
+  // React 19 requires an initial value for every useRef() call
   const prevRef = useRef<number>(value);
-  // React 19 requires an explicit initial value for useRef — pass null
   const frameRef = useRef<number | null>(null);
 
   useEffect(() => {

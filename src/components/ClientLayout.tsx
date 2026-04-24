@@ -3,7 +3,9 @@
 import React, { Suspense, useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import ProfileModal from "@/components/ProfileModal";
-import { Menu } from "lucide-react";
+import CommandPalette from "@/components/CommandPalette";
+import LiveTelemetry from "@/components/LiveTelemetry";
+import { Menu, Command } from "lucide-react";
 
 export default function ClientLayout({
   children,
@@ -14,7 +16,7 @@ export default function ClientLayout({
 
   return (
     <>
-      {/* Mobile Header - Only visible on small screens */}
+      {/* Mobile Header */}
       <div className="lg:hidden flex items-center justify-between p-4 bg-slate-900 border-b border-slate-800 sticky top-0 z-50">
         <span className="font-bold text-emerald-400">FinSight</span>
         <button
@@ -48,17 +50,30 @@ export default function ClientLayout({
         )}
 
         {/* Main Content Area */}
-        <main className="flex-1 min-h-screen relative w-full lg:ml-0">
+        <main className="flex-1 min-h-screen relative w-full lg:ml-0 pb-8 lg:pb-12">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {children}
+          </div>
+
+          {/* Floating Cmd-K hint */}
+          <div className="pointer-events-none fixed bottom-12 right-4 z-40 hidden lg:block">
+            <div className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/80 px-3 py-1.5 text-[11px] text-slate-500 backdrop-blur-md">
+              <Command className="h-3 w-3" />
+              <span className="font-mono">K</span>
+              <span>for commands</span>
+            </div>
           </div>
         </main>
       </div>
 
-      {/* Global Profile Modal — opens from any page via ?profile=open */}
+      {/* Globally-mounted overlays */}
       <Suspense fallback={null}>
         <ProfileModal />
       </Suspense>
+      <CommandPalette />
+
+      {/* Clickable telemetry ticker — mounted globally, fixed to bottom */}
+      <LiveTelemetry />
     </>
   );
 }

@@ -695,4 +695,3 @@ function AchievementBadge({
     </div>
   );
 }
-

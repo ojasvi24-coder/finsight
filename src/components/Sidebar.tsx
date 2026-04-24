@@ -172,3 +172,4 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
     </aside>
   );
 }
+

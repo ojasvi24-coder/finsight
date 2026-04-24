@@ -18,9 +18,9 @@ import {
   Target,
   Activity,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useUser } from "@/lib/user";
-import LiveTelemetry from "@/components/LiveTelemetry";
+import { useFinance } from "@/lib/finance";
 
 /* ---------- Mini "live" chart preview (inline SVG, no lib needed) ---------- */
 function LiveChartPreview() {
@@ -151,50 +151,92 @@ function LiveChartPreview() {
 /* ---------- Home Page ---------- */
 export default function HomePage() {
   const { firstName, hasProfile } = useUser();
+  const {
+    netWorth,
+    netCashFlow,
+    emergencyFundCurrent,
+    emergencyFundTarget,
+    portfolioUnrealizedPnL,
+    transactions,
+    isLoaded,
+  } = useFinance();
 
-  // Live net worth ticker state (animates gently to feel alive)
-  const baseNetWorth = 152480;
-  const [tickerValue, setTickerValue] = useState(baseNetWorth);
-  const [tickerChange, setTickerChange] = useState(3210);
+  // Live net worth ticker — seeded by the user's real net worth,
+  // drifts gently to simulate market movement in real time.
+  const [tickerValue, setTickerValue] = useState(netWorth);
+  const [tickerChange, setTickerChange] = useState(0);
   const [tickerDirection, setTickerDirection] = useState<"up" | "down">("up");
 
+  // Re-seed whenever the underlying net worth changes (new expense, edited income, etc.)
   useEffect(() => {
+    if (isLoaded) {
+      setTickerValue(netWorth);
+      setTickerChange(0);
+    }
+  }, [netWorth, isLoaded]);
+
+  useEffect(() => {
+    if (!isLoaded) return;
     const id = setInterval(() => {
       setTickerValue((prev) => {
-        const drift = (Math.random() - 0.48) * 180;
+        // Drift scaled to ~0.02% of net worth per tick — realistic for a live portfolio
+        const magnitude = Math.max(50, netWorth * 0.0002);
+        const drift = (Math.random() - 0.48) * magnitude;
         const next = prev + drift;
         setTickerDirection(drift >= 0 ? "up" : "down");
-        setTickerChange(Math.round(next - baseNetWorth));
+        setTickerChange(Math.round(next - netWorth));
         return next;
       });
     }, 2800);
     return () => clearInterval(id);
-  }, []);
+  }, [isLoaded, netWorth]);
 
-  // Daily Three — dynamic, would be LLM-generated in production.
-  const dailyThree = [
-    {
-      kind: "Action",
-      icon: AlertCircle,
-      accent: "text-amber-400 bg-amber-500/10 border-amber-500/20",
-      text: "You spent 15% more on dining this week; adjust your weekend budget.",
-      href: "/dashboard",
-    },
-    {
-      kind: "Market",
-      icon: TrendingUp,
-      accent: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
-      text: "Your tech holdings are up today; consider rebalancing toward bonds.",
-      href: "/learn/the-art-of-asset-allocation",
-    },
-    {
-      kind: "Milestone",
-      icon: Target,
-      accent: "text-cyan-400 bg-cyan-500/10 border-cyan-500/20",
-      text: "You're $200 away from your Emergency Fund goal. Almost there.",
-      href: "/dashboard",
-    },
-  ];
+  // --- Compute Priority Vectors FROM the user's real data ---
+  const dailyThree = useMemo(() => {
+    // Find largest expense category for the "Action" vector
+    const byCat: Record<string, number> = {};
+    transactions.forEach((t) => {
+      byCat[t.category] = (byCat[t.category] || 0) + t.amount;
+    });
+    const sortedCats = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
+    const topCategory = sortedCats[0];
+    const emergencyGap = Math.max(0, emergencyFundTarget - emergencyFundCurrent);
+
+    return [
+      {
+        kind: "Action",
+        icon: AlertCircle,
+        accent: "text-amber-400 bg-amber-500/10 border-amber-500/20",
+        text: topCategory
+          ? `${topCategory[0]} is your largest spending category at $${topCategory[1].toLocaleString()}. Watch the trend this week.`
+          : "Log a few expenses in the dashboard to unlock personalized signals.",
+        href: "/dashboard",
+      },
+      {
+        kind: "Market",
+        icon: portfolioUnrealizedPnL >= 0 ? TrendingUp : TrendingDown,
+        accent:
+          portfolioUnrealizedPnL >= 0
+            ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+            : "text-rose-400 bg-rose-500/10 border-rose-500/20",
+        text:
+          portfolioUnrealizedPnL >= 0
+            ? `Your portfolio shows $${portfolioUnrealizedPnL.toLocaleString()} in unrealized gains. Consider rebalancing drift.`
+            : `Your portfolio is down $${Math.abs(portfolioUnrealizedPnL).toLocaleString()} unrealized — potential tax-loss harvesting opportunity.`,
+        href: "/learn/the-art-of-asset-allocation",
+      },
+      {
+        kind: "Milestone",
+        icon: Target,
+        accent: "text-cyan-400 bg-cyan-500/10 border-cyan-500/20",
+        text:
+          emergencyGap <= 0
+            ? `Emergency fund fully funded at $${emergencyFundCurrent.toLocaleString()}. Reallocate surplus.`
+            : `You're $${emergencyGap.toLocaleString()} away from your $${emergencyFundTarget.toLocaleString()} emergency fund goal.`,
+        href: "/dashboard",
+      },
+    ];
+  }, [transactions, portfolioUnrealizedPnL, emergencyFundCurrent, emergencyFundTarget]);
 
   // Simulate AI calculation — shows Processing... shimmer for ~500ms
   const [vectorsLoading, setVectorsLoading] = useState(true);
@@ -253,71 +295,68 @@ export default function HomePage() {
             backgroundSize: "48px 48px",
           }}
         />
-        {/* Live telemetry strings — scrolling hex/data feeds */}
-        <LiveTelemetry />
+        {/* LiveTelemetry is now mounted globally in ClientLayout */}
       </div>
 
       <div className="relative z-10 mx-auto max-w-6xl px-6 pt-8 pb-20 sm:px-8">
         {/* ---------- PULSE HEADER (live net worth ticker) ---------- */}
-        {hasProfile && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="mb-10 flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between"
-          >
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                  Live
-                </span>
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="mb-10 flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                Live
+              </span>
+            </div>
+            <div>
+              <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">
+                Net Worth{firstName ? ` · ${firstName}` : ""}
               </div>
-              <div>
-                <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">
-                  Net Worth{firstName ? ` · ${firstName}` : ""}
-                </div>
-                <motion.div
-                  key={Math.round(tickerValue / 50)}
-                  initial={{ opacity: 0.6, y: 2 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="font-mono text-xl font-bold text-white sm:text-2xl"
-                >
-                  ${Math.round(tickerValue).toLocaleString()}
-                </motion.div>
-              </div>
-              <div
-                className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                  tickerDirection === "up"
-                    ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
-                    : "border-rose-500/20 bg-rose-500/10 text-rose-400"
-                }`}
+              <motion.div
+                key={Math.round(tickerValue / 50)}
+                initial={{ opacity: 0.6, y: 2 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+                className="font-mono text-xl font-bold text-white sm:text-2xl"
               >
-                {tickerDirection === "up" ? (
-                  <TrendingUp className="h-3.5 w-3.5" />
-                ) : (
-                  <TrendingDown className="h-3.5 w-3.5" />
-                )}
-                {tickerChange >= 0 ? "+" : ""}${Math.abs(tickerChange).toLocaleString()} today
-              </div>
+                ${Math.round(tickerValue).toLocaleString()}
+              </motion.div>
             </div>
-            <div className="flex items-center gap-2">
-              <Link href="/dashboard">
-                <button className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-xs font-semibold text-slate-200 transition-colors hover:border-slate-600 hover:bg-slate-900">
-                  <Plus className="h-3.5 w-3.5" />
-                  Add Transaction
-                </button>
-              </Link>
-              <Link href="/dashboard">
-                <button className="flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-2 text-xs font-semibold text-slate-950 transition-colors hover:bg-emerald-400">
-                  <BarChart3 className="h-3.5 w-3.5" />
-                  Check Portfolio
-                </button>
-              </Link>
+            <div
+              className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                tickerDirection === "up"
+                  ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+                  : "border-rose-500/20 bg-rose-500/10 text-rose-400"
+              }`}
+            >
+              {tickerDirection === "up" ? (
+                <TrendingUp className="h-3.5 w-3.5" />
+              ) : (
+                <TrendingDown className="h-3.5 w-3.5" />
+              )}
+              {tickerChange >= 0 ? "+" : ""}${Math.abs(tickerChange).toLocaleString()} today
             </div>
-          </motion.div>
-        )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Link href="/dashboard">
+              <button className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-xs font-semibold text-slate-200 transition-colors hover:border-slate-600 hover:bg-slate-900">
+                <Plus className="h-3.5 w-3.5" />
+                Add Transaction
+              </button>
+            </Link>
+            <Link href="/dashboard">
+              <button className="flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-2 text-xs font-semibold text-slate-950 transition-colors hover:bg-emerald-400">
+                <BarChart3 className="h-3.5 w-3.5" />
+                Check Portfolio
+              </button>
+            </Link>
+          </div>
+        </motion.div>
 
         <motion.div
           variants={containerVariants}
@@ -572,3 +611,4 @@ export default function HomePage() {
     </div>
   );
 }
+

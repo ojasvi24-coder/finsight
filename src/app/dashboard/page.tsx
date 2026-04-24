@@ -4,6 +4,9 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+
+// Opt out of static prerendering — useSearchParams requires dynamic rendering.
+export const dynamic = "force-dynamic";
 import {
   TrendingUp,
   TrendingDown,
@@ -30,6 +33,8 @@ import {
   ArrowRight,
   AlertTriangle,
   Activity,
+  LayoutGrid,
+  Columns3,
 } from "lucide-react";
 import {
   LineChart,
@@ -44,11 +49,17 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { useUser } from "@/lib/user";
+import { useFinance } from "@/lib/finance";
 import MarketPulse from "@/components/MarketPulse";
 import AnimatedNumber from "@/components/AnimatedNumber";
-
-// Opt out of static prerendering — useSearchParams requires dynamic rendering.
-export const dynamic = "force-dynamic";
+import MonteCarloSim from "@/components/MonteCarloSim";
+import LiquidityForecast from "@/components/LiquidityForecast";
+import TaxLossHarvest from "@/components/TaxLossHarvest";
+import BlockchainIndexer from "@/components/BlockchainIndexer";
+import WebhookGuardrails from "@/components/WebhookGuardrails";
+import SecuritySovereignty from "@/components/SecuritySovereignty";
+import OcrUpload from "@/components/OcrUpload";
+import WarRoomView from "@/components/WarRoomView";
 
 type TimeRange = "3M" | "6M" | "12M";
 
@@ -230,31 +241,33 @@ function syntheticSparkline(changePct: number, seed = 10): number[] {
    MAIN DASHBOARD
    ============================================================ */
 function MergedFinancialDashboard() {
-  const { firstName, hasProfile, name: userName, email: userEmail, updateUser } = useUser();
-  const [nameDraft, setNameDraft] = useState("");
-  const [emailDraft, setEmailDraft] = useState("");
+  const { firstName, hasProfile } = useUser();
   const searchParams = useSearchParams();
   const router = useRouter();
 
   const [showBalance, setShowBalance] = useState(true);
   const [isClient, setIsClient] = useState(false);
+  const [viewMode, setViewMode] = useState<"overview" | "war-room">("overview");
+  const [focusedAsset, setFocusedAsset] = useState<string | null>(null);
 
-  // Simulation states
-  const [initialInvestment, setInitialInvestment] = useState(50000);
-  const [annualReturn, setAnnualReturn] = useState(8);
-  const [years, setYears] = useState(30);
+  // Unified finance store — shared with home page
+  const finance = useFinance();
+  const {
+    monthlyIncome,
+    initialInvestment,
+    annualReturn,
+    projectionYears: years,
+    transactions,
+    addTransaction,
+    deleteTransaction,
+    update: updateFinance,
+  } = finance;
 
-  // Expenses only
-  const [transactions, setTransactions] = useState<Transaction[]>([
-    { id: "2", name: "Rent Payment", category: "Housing", amount: 1500, date: "2024-06-10", type: "expense" },
-    { id: "3", name: "Grocery Store", category: "Food", amount: 185, date: "2024-06-12", type: "expense" },
-    { id: "4", name: "Netflix Subscription", category: "Entertainment", amount: 16, date: "2024-06-05", type: "expense" },
-    { id: "6", name: "Electricity Bill", category: "Utilities", amount: 120, date: "2024-06-08", type: "expense" },
-    { id: "7", name: "Gas", category: "Transportation", amount: 85, date: "2024-06-03", type: "expense" },
-    { id: "8", name: "Restaurant", category: "Food", amount: 65, date: "2024-06-18", type: "expense" },
-  ]);
-
-  const [monthlyIncome, setMonthlyIncome] = useState(6000);
+  // Setters that write through the store
+  const setInitialInvestment = (v: number) => updateFinance({ initialInvestment: v });
+  const setAnnualReturn = (v: number) => updateFinance({ annualReturn: v });
+  const setYears = (v: number) => updateFinance({ projectionYears: v });
+  const setMonthlyIncome = (v: number) => updateFinance({ monthlyIncome: v });
 
   const [newTransaction, setNewTransaction] = useState({
     name: "",
@@ -286,14 +299,22 @@ function MergedFinancialDashboard() {
     }
   }, [searchParams, router]);
 
-  // Sync the settings drafts with the stored profile whenever it loads
+  // Listen for clicks from the global LiveTelemetry ticker —
+  // overlay the focused asset's correlation path on the Net Worth chart.
   useEffect(() => {
-    setNameDraft(userName);
-  }, [userName]);
-
-  useEffect(() => {
-    setEmailDraft(userEmail);
-  }, [userEmail]);
+    const onFocus = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.symbol) {
+        setFocusedAsset(detail.symbol);
+        // Scroll the chart into view so user sees the overlay
+        document
+          .getElementById("net-worth-trend")
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    };
+    window.addEventListener("finsight-asset-focus", onFocus);
+    return () => window.removeEventListener("finsight-asset-focus", onFocus);
+  }, []);
 
   const fetchLiveMarket = async () => {
     setIsLoadingMarket(true);
@@ -393,23 +414,46 @@ function MergedFinancialDashboard() {
     let balance = initialInvestment;
     const monthlyNetFlow = netCashFlow / months.length;
 
+    // Synthetic but deterministic asset paths — seeded per symbol so the same
+    // ticker always shows the same overlay. In production, these would come
+    // from actual market data via a pricing API.
+    const assetProfiles: Record<
+      string,
+      { correlation: number; volatility: number }
+    > = {
+      SPX: { correlation: 0.85, volatility: 0.08 },
+      NDX: { correlation: 0.72, volatility: 0.14 },
+      BTC: { correlation: 0.35, volatility: 0.35 },
+      ETH: { correlation: 0.28, volatility: 0.4 },
+      GLD: { correlation: -0.15, volatility: 0.06 },
+    };
+    const focused = focusedAsset ? assetProfiles[focusedAsset] : null;
+
     // Historical months — actual balance, no aiPath
-    const historical = months.map((month) => {
+    const historical = months.map((month, i) => {
       balance += monthlyNetFlow;
+      let correlationPath: number | null = null;
+      if (focused) {
+        // Deterministic "market" path centered on 1.0, scaled to user's initial balance
+        // This simulates what the balance would have done if it moved like the asset
+        const seed = (focusedAsset || "X").charCodeAt(0) + i * 7;
+        const pseudoRand = (Math.sin(seed) * 10000) % 1;
+        const assetMove = 1 + focused.correlation * 0.01 * (i + 1) + pseudoRand * focused.volatility * 0.1;
+        correlationPath = Math.round(initialInvestment * assetMove);
+      }
       return {
         month,
         balance: Math.round(balance),
         aiPath: null as number | null,
         spending: Math.round(totalExpenses / months.length),
+        correlation: correlationPath,
       };
     });
 
     // AI Probabilistic Path — next 30 days (1 month) forward projection
-    // Uses current savings trajectory + expected return, with a small uncertainty band
     const monthlyReturn = annualReturn / 100 / 12;
     const projectedNext = balance * (1 + monthlyReturn) + monthlyNetFlow;
 
-    // Overlap the current month with aiPath so the dotted line visually connects
     const lastHistorical = historical[historical.length - 1];
     lastHistorical.aiPath = lastHistorical.balance;
 
@@ -420,9 +464,10 @@ function MergedFinancialDashboard() {
         balance: null as any,
         aiPath: Math.round(projectedNext),
         spending: 0,
+        correlation: null,
       },
     ];
-  }, [initialInvestment, netCashFlow, totalExpenses, annualReturn]);
+  }, [initialInvestment, netCashFlow, totalExpenses, annualReturn, focusedAsset]);
 
   const compoundData = useMemo(() => {
     const data = [];
@@ -541,23 +586,18 @@ function MergedFinancialDashboard() {
   // Handlers
   const handleAddTransaction = () => {
     if (!newTransaction.name || newTransaction.amount === 0) return;
-    const id = Date.now().toString();
-    setTransactions([
-      ...transactions,
-      {
-        id,
-        name: newTransaction.name,
-        category: newTransaction.category,
-        amount: Math.abs(newTransaction.amount),
-        date: new Date().toISOString().split("T")[0],
-        type: "expense",
-      },
-    ]);
+    addTransaction({
+      name: newTransaction.name,
+      category: newTransaction.category,
+      amount: Math.abs(newTransaction.amount),
+      date: new Date().toISOString().split("T")[0],
+      type: "expense",
+    });
     setNewTransaction({ name: "", category: "Housing", amount: 0 });
   };
 
   const handleDeleteTransaction = (id: string) => {
-    setTransactions(transactions.filter((t) => t.id !== id));
+    deleteTransaction(id);
   };
 
   const handleExportReport = () => {
@@ -679,19 +719,55 @@ function MergedFinancialDashboard() {
             </p>
           </div>
 
-          {/* Guide — neutral button, not emerald gradient */}
-          <Link href="/learn">
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-2.5 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-600 hover:bg-slate-900"
-            >
-              <BookOpen className="h-4 w-4 text-slate-400" />
-              Guide
-            </motion.button>
-          </Link>
+          <div className="flex items-center gap-2">
+            {/* View mode toggle */}
+            <div className="flex rounded-lg border border-slate-700 bg-slate-900/60 p-1">
+              <button
+                onClick={() => setViewMode("overview")}
+                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+                  viewMode === "overview"
+                    ? "bg-slate-800 text-white"
+                    : "text-slate-500 hover:text-slate-300"
+                }`}
+                aria-label="Overview layout"
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+                Overview
+              </button>
+              <button
+                onClick={() => setViewMode("war-room")}
+                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+                  viewMode === "war-room"
+                    ? "bg-emerald-500/15 text-emerald-300 shadow-[0_0_15px_-5px_rgba(16,185,129,0.7)]"
+                    : "text-slate-500 hover:text-slate-300"
+                }`}
+                aria-label="War Room layout"
+              >
+                <Columns3 className="h-3.5 w-3.5" />
+                War Room
+              </button>
+            </div>
+
+            {/* Guide — neutral button, not emerald gradient */}
+            <Link href="/learn">
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-2.5 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-600 hover:bg-slate-900"
+              >
+                <BookOpen className="h-4 w-4 text-slate-400" />
+                Guide
+              </motion.button>
+            </Link>
+          </div>
         </motion.header>
 
+        {/* ---------- WAR ROOM MODE ---------- */}
+        {viewMode === "war-room" && <WarRoomView />}
+
+        {/* ---------- OVERVIEW MODE (wraps everything below) ---------- */}
+        {viewMode === "overview" && (
+          <>
         {/* ---------- FIRST-TIME USER EMPTY STATE ---------- */}
         {!hasProfile && (
           <motion.div
@@ -1011,16 +1087,31 @@ function MergedFinancialDashboard() {
           <div className="space-y-5 lg:col-span-2">
             {/* Net Worth Trend */}
             <motion.div
+              id="net-worth-trend"
               variants={itemVariants}
               initial="hidden"
               animate="visible"
               className={`${cardBase} p-6`}
             >
-              <div className="mb-5">
-                <h2 className="text-lg font-bold text-white">Asset Architecture</h2>
-                <p className="text-xs text-slate-500">
-                  6-month historical path with AI probabilistic projection
-                </p>
+              <div className="mb-5 flex items-start justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-white">Asset Architecture</h2>
+                  <p className="text-xs text-slate-500">
+                    6-month historical path with AI probabilistic projection
+                  </p>
+                </div>
+                {focusedAsset && (
+                  <motion.button
+                    initial={{ opacity: 0, x: 5 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    onClick={() => setFocusedAsset(null)}
+                    className="group flex items-center gap-2 rounded-lg border border-purple-500/30 bg-purple-500/10 px-2.5 py-1 text-xs font-semibold text-purple-300 transition-colors hover:bg-purple-500/20"
+                  >
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-purple-400" />
+                    Overlay: {focusedAsset}
+                    <X className="h-3 w-3 opacity-60 group-hover:opacity-100" />
+                  </motion.button>
+                )}
               </div>
               <div className="h-[280px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
@@ -1043,7 +1134,13 @@ function MergedFinancialDashboard() {
                       labelStyle={{ color: "#f1f5f9", fontWeight: 700, marginBottom: 4 }}
                       formatter={(value: any, name: any) => [
                         `$${Number(value).toLocaleString()}`,
-                        name === "balance" ? "Balance" : "Spending",
+                        name === "balance"
+                          ? "Balance"
+                          : name === "aiPath"
+                          ? "AI Path"
+                          : name === "correlation"
+                          ? `${focusedAsset} Correlation`
+                          : "Spending",
                       ]}
                     />
                     <Legend />
@@ -1068,11 +1165,26 @@ function MergedFinancialDashboard() {
                       name="AI Probabilistic Path"
                       connectNulls={true}
                     />
+                    {focusedAsset && (
+                      <Line
+                        type="monotone"
+                        dataKey="correlation"
+                        stroke="#a855f7"
+                        strokeWidth={2}
+                        strokeDasharray="2 3"
+                        dot={{ fill: "#a855f7", r: 3 }}
+                        activeDot={{ r: 5, fill: "#a855f7", stroke: "#020617", strokeWidth: 2 }}
+                        name={`${focusedAsset} Correlation`}
+                        connectNulls={true}
+                      />
+                    )}
                   </LineChart>
                 </ResponsiveContainer>
               </div>
               <p className="mt-3 text-xs text-slate-500">
-                💡 Hover over the chart to see exact balance at each month.
+                💡 {focusedAsset
+                  ? `Purple overlay: ${focusedAsset} correlation path. Click its ticker at the bottom again or the × to clear.`
+                  : "Click any ticker in the telemetry bar to overlay its correlation path."}
               </p>
             </motion.div>
 
@@ -1443,6 +1555,104 @@ function MergedFinancialDashboard() {
           </motion.section>
         </div>
 
+        {/* ---------- ADVANCED INTELLIGENCE (Autonomous Layer) ---------- */}
+        <div className="grid gap-5 lg:grid-cols-2">
+          {/* Liquidity Forecast */}
+          <motion.section
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.45 }}
+            className={`${cardBase} p-6`}
+          >
+            <LiquidityForecast
+              currentBalance={currentBalance}
+              monthlyNetFlow={monthlySavings}
+            />
+          </motion.section>
+
+          {/* Monte Carlo */}
+          <motion.section
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.45, delay: 0.08 }}
+            className={`${cardBase} p-6`}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-white">Monte Carlo Stress Test</h2>
+              <span className="font-mono text-[10px] text-slate-500">
+                GBM · 10k trials
+              </span>
+            </div>
+            <MonteCarloSim
+              initialBalance={currentBalance}
+              monthlyContribution={monthlySavings}
+              annualReturn={annualReturn}
+            />
+          </motion.section>
+        </div>
+
+        {/* ---------- DEEP INTEGRATIONS ---------- */}
+        <div className="grid gap-5 lg:grid-cols-2">
+          {/* Tax-Loss Harvest */}
+          <motion.section
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.45 }}
+            className={`${cardBase} p-6`}
+          >
+            <TaxLossHarvest />
+          </motion.section>
+
+          {/* Blockchain Indexer */}
+          <motion.section
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.45, delay: 0.08 }}
+            className={`${cardBase} p-6`}
+          >
+            <BlockchainIndexer />
+          </motion.section>
+        </div>
+
+        <div className="grid gap-5 lg:grid-cols-2">
+          {/* Webhook Guardrails */}
+          <motion.section
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.45 }}
+            className={`${cardBase} p-6`}
+          >
+            <WebhookGuardrails />
+          </motion.section>
+
+          {/* OCR Upload */}
+          <motion.section
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.45, delay: 0.08 }}
+            className={`${cardBase} p-6`}
+          >
+            <OcrUpload />
+          </motion.section>
+        </div>
+
+        {/* Security Sovereignty spans full width */}
+        <motion.section
+          initial={{ opacity: 0, y: 12 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.45 }}
+          className={`${cardBase} p-6`}
+        >
+          <SecuritySovereignty />
+        </motion.section>
+
         {/* ---------- EXPENSES + QUICK ACTIONS ---------- */}
         <motion.div
           variants={itemVariants}
@@ -1666,6 +1876,8 @@ function MergedFinancialDashboard() {
             </motion.button>
           </Link>
         </motion.div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -1718,17 +1930,9 @@ function Slider({
    Risk Heatmap — portfolio sector volatility grid
    ============================================================ */
 function RiskHeatmap() {
-  // In production, derive these from real portfolio allocation + market data.
-  const sectors = [
-    { name: "Tech", weight: 28, risk: 72, change: -1.2 },
-    { name: "Finance", weight: 18, risk: 45, change: 0.3 },
-    { name: "Healthcare", weight: 14, risk: 32, change: 0.8 },
-    { name: "Energy", weight: 10, risk: 68, change: -2.1 },
-    { name: "Consumer", weight: 12, risk: 28, change: 0.5 },
-    { name: "Industrials", weight: 8, risk: 38, change: 0.1 },
-    { name: "Real Estate", weight: 6, risk: 52, change: -0.4 },
-    { name: "Bonds", weight: 4, risk: 12, change: 0.2 },
-  ];
+  // Now wired to the real finance store — sectors are user-editable.
+  const { sectors, updateSector } = useFinance();
+  const [editing, setEditing] = useState<string | null>(null);
 
   // Risk → color: green (low) → amber (med) → red (high)
   const riskColor = (risk: number) => {
@@ -1746,21 +1950,25 @@ function RiskHeatmap() {
     return "High";
   };
 
+  const totalWeight = sectors.reduce((s, sec) => s + sec.weight, 0);
+
   return (
     <div>
       <div className="grid grid-cols-4 gap-2">
         {sectors.map((s) => {
           const positive = s.change >= 0;
+          const isEditing = editing === s.name;
           return (
             <div
               key={s.name}
-              className={`group relative flex flex-col justify-between overflow-hidden rounded-lg border border-slate-800 p-3 transition-transform hover:scale-[1.02] ${riskColor(
+              className={`group relative flex flex-col justify-between overflow-hidden rounded-lg border border-slate-800 p-3 transition-all hover:scale-[1.02] ${riskColor(
                 s.risk
               )}`}
-              title={`${s.name}: ${riskLabel(s.risk)} risk · ${s.weight}% of portfolio`}
+              title={`${s.name}: ${riskLabel(s.risk)} risk · ${s.weight}% of portfolio · click to edit`}
+              onClick={() => setEditing(isEditing ? null : s.name)}
             >
               <div className="absolute inset-0 bg-slate-950/55" />
-              <div className="relative">
+              <div className="relative cursor-pointer">
                 <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-200/90">
                   {s.name}
                 </div>
@@ -1781,12 +1989,55 @@ function RiskHeatmap() {
                   {s.change.toFixed(1)}%
                 </span>
               </div>
+
+              {/* Inline edit panel */}
+              {isEditing && (
+                <div
+                  className="absolute inset-0 z-10 flex flex-col justify-center gap-1.5 bg-slate-950/95 p-2 backdrop-blur-sm"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <label className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">
+                    Weight %
+                    <input
+                      type="number"
+                      value={s.weight}
+                      onChange={(e) =>
+                        updateSector(s.name, {
+                          weight: Math.max(0, Number(e.target.value)),
+                        })
+                      }
+                      className="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1 py-0.5 font-mono text-[10px] text-white outline-none focus:border-emerald-500/50"
+                    />
+                  </label>
+                  <label className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">
+                    Risk 0-100
+                    <input
+                      type="number"
+                      value={s.risk}
+                      min={0}
+                      max={100}
+                      onChange={(e) =>
+                        updateSector(s.name, {
+                          risk: Math.min(100, Math.max(0, Number(e.target.value))),
+                        })
+                      }
+                      className="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1 py-0.5 font-mono text-[10px] text-white outline-none focus:border-emerald-500/50"
+                    />
+                  </label>
+                  <button
+                    onClick={() => setEditing(null)}
+                    className="mt-1 rounded bg-emerald-500 py-0.5 text-[10px] font-semibold text-slate-950 hover:bg-emerald-400"
+                  >
+                    Done
+                  </button>
+                </div>
+              )}
             </div>
           );
         })}
       </div>
 
-      {/* Legend */}
+      {/* Legend + total weight */}
       <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-800 pt-3 text-[10px] text-slate-400">
         <span className="font-semibold uppercase tracking-wider">Risk scale</span>
         <span className="flex items-center gap-1.5">
@@ -1800,6 +2051,12 @@ function RiskHeatmap() {
         </span>
         <span className="flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-sm bg-rose-500/80" /> High
+        </span>
+        <span className="ml-auto font-mono">
+          Σ = {totalWeight}%
+          {totalWeight !== 100 && (
+            <span className="ml-1 text-amber-400">(not 100)</span>
+          )}
         </span>
       </div>
     </div>
@@ -1895,34 +2152,6 @@ function ScenarioSlider({
         )}
       </div>
     </div>
-  );
-}
-
-/* ============================================================
-   Suspense wrapper — required because MergedFinancialDashboard
-   calls useSearchParams() to handle ?profile=open deep links.
-   Next.js 16 refuses to prerender components using that hook
-   without a parent Suspense boundary.
-   ============================================================ */
-export default function DashboardPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-slate-950">
-          <div className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 sm:py-10">
-            <div className="h-8 w-48 animate-pulse rounded bg-slate-800/60" />
-            <div className="h-40 animate-pulse rounded-2xl border border-slate-800 bg-slate-900/40" />
-            <div className="grid gap-5 sm:grid-cols-3">
-              <div className="h-24 animate-pulse rounded-2xl border border-slate-800 bg-slate-900/40" />
-              <div className="h-24 animate-pulse rounded-2xl border border-slate-800 bg-slate-900/40" />
-              <div className="h-24 animate-pulse rounded-2xl border border-slate-800 bg-slate-900/40" />
-            </div>
-          </div>
-        </div>
-      }
-    >
-      <MergedFinancialDashboard />
-    </Suspense>
   );
 }
 
@@ -2111,6 +2340,18 @@ function FearGreedMeter({ marketData }: { marketData: any[] }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/* ============================================================
+   Suspense wrapper — Next.js 16 requires useSearchParams() to be
+   rendered inside a Suspense boundary during prerender.
+   ============================================================ */
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-950" />}>
+      <MergedFinancialDashboard />
+    </Suspense>
   );
 }
 

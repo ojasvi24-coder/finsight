@@ -146,3 +146,4 @@ export default function MarketPulse({ value, label }: MarketPulseProps) {
     </div>
   );
 }
+
