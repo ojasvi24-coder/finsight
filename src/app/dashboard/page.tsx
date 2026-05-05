@@ -1,2367 +1,972 @@
 "use client";
 
-import Link from "next/link";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, useEffect, useMemo, useRef, Suspense } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
-
-// Opt out of static prerendering — useSearchParams requires dynamic rendering.
-export const dynamic = "force-dynamic";
 import {
+  Sparkles,
   TrendingUp,
   TrendingDown,
-  PiggyBank,
-  Target,
-  ArrowUpRight,
-  ArrowDownRight,
-  Eye,
-  EyeOff,
-  BookOpen,
-  BarChart3,
-  Wallet,
-  Settings2,
-  Lightbulb,
-  Filter,
-  ExternalLink,
-  Globe,
-  Trash2,
   Plus,
-  Download,
-  X,
-  Sparkles,
-  HelpCircle,
-  ArrowRight,
+  Minus,
   AlertTriangle,
+  CheckCircle2,
+  Info,
+  ChevronDown,
+  ChevronRight,
+  DollarSign,
+  Target,
   Activity,
-  LayoutGrid,
-  Columns3,
+  ArrowUpRight,
+  Zap,
+  Brain,
+  X,
+  RotateCcw,
+  Play,
+  Loader2,
 } from "lucide-react";
-import {
-  LineChart,
-  Line,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from "recharts";
-import { useUser } from "@/lib/user";
 import { useFinance } from "@/lib/finance";
-import MarketPulse from "@/components/MarketPulse";
-import AnimatedNumber from "@/components/AnimatedNumber";
-import MonteCarloSim from "@/components/MonteCarloSim";
-import LiquidityForecast from "@/components/LiquidityForecast";
-import TaxLossHarvest from "@/components/TaxLossHarvest";
-import BlockchainIndexer from "@/components/BlockchainIndexer";
-import WebhookGuardrails from "@/components/WebhookGuardrails";
-import SecuritySovereignty from "@/components/SecuritySovereignty";
-import OcrUpload from "@/components/OcrUpload";
-import WarRoomView from "@/components/WarRoomView";
-import SectionNav from "@/components/SectionNav";
+import { useUser } from "@/lib/user";
+import { monteCarloRetirement } from "@/lib/math";
 
-type TimeRange = "3M" | "6M" | "12M";
+// ─── tiny helpers ────────────────────────────────────────────────────────────
+const fmt = (v: number) =>
+  v < 0
+    ? `-$${Math.abs(v).toLocaleString()}`
+    : `$${v.toLocaleString()}`;
 
-interface Transaction {
-  id: string;
-  name: string;
-  category: string;
-  amount: number;
-  date: string;
-  type: "expense";
-}
+const fmtCompact = (v: number) => {
+  const abs = Math.abs(v);
+  const sign = v < 0 ? "-" : "";
+  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(0)}k`;
+  return fmt(v);
+};
 
-interface MarketAsset {
-  id: string;
-  name: string;
-  symbol: string;
-  price: number;
-  change: number;
-  url: string;
-  sparkline: number[];
-}
-
-/* ============================================================
-   INLINE COMPONENTS (kept local to avoid import/casing issues)
-   ============================================================ */
-
-/** Tiny SVG sparkline — zero deps, animates in. */
-function Sparkline({
-  data,
-  width = 90,
-  height = 32,
-  positive = true,
+// ─── Animated counter ────────────────────────────────────────────────────────
+function Counter({
+  value,
+  prefix = "$",
+  decimals = 0,
+  className = "",
 }: {
-  data: number[];
-  width?: number;
-  height?: number;
-  positive?: boolean;
+  value: number;
+  prefix?: string;
+  decimals?: number;
+  className?: string;
 }) {
-  if (!data || data.length < 2) return null;
+  const [display, setDisplay] = useState(value);
+  const prev = useRef(value);
+  const frame = useRef<number | null>(null);
 
-  const padding = 3;
-  const max = Math.max(...data);
-  const min = Math.min(...data);
-  const range = max - min || 1;
-  const stepX = (width - padding * 2) / (data.length - 1);
-  const toY = (v: number) =>
-    height - padding - ((v - min) / range) * (height - padding * 2);
+  useEffect(() => {
+    const start = prev.current;
+    const end = value;
+    if (start === end) return;
+    const t0 = performance.now();
+    const dur = 700;
+    const tick = (now: number) => {
+      const p = Math.min(1, (now - t0) / dur);
+      const ease = 1 - Math.pow(2, -10 * p);
+      setDisplay(start + (end - start) * ease);
+      if (p < 1) frame.current = requestAnimationFrame(tick);
+      else prev.current = end;
+    };
+    frame.current = requestAnimationFrame(tick);
+    return () => { if (frame.current) cancelAnimationFrame(frame.current); };
+  }, [value]);
 
-  const pathD = data
-    .map((v, i) => `${i === 0 ? "M" : "L"} ${padding + i * stepX} ${toY(v)}`)
-    .join(" ");
-
-  const areaD =
-    `M ${padding} ${height - padding} ` +
-    data.map((v, i) => `L ${padding + i * stepX} ${toY(v)}`).join(" ") +
-    ` L ${padding + (data.length - 1) * stepX} ${height - padding} Z`;
-
-  const color = positive ? "#10b981" : "#f43f5e";
-  const fadeId = `spark-${color.replace("#", "")}-${data.length}-${Math.round(
-    data[0]
-  )}`;
-
-  const lastX = padding + (data.length - 1) * stepX;
-  const lastY = toY(data[data.length - 1]);
+  const formatted = display.toLocaleString(undefined, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
 
   return (
-    <svg
-      viewBox={`0 0 ${width} ${height}`}
-      width={width}
-      height={height}
-      className="overflow-visible"
-    >
-      <defs>
-        <linearGradient id={fadeId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity={0.35} />
-          <stop offset="100%" stopColor={color} stopOpacity={0} />
-        </linearGradient>
-      </defs>
-      <path d={areaD} fill={`url(#${fadeId})`} />
-      <motion.path
-        d={pathD}
-        fill="none"
-        stroke={color}
-        strokeWidth={1.75}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        initial={{ pathLength: 0 }}
-        animate={{ pathLength: 1 }}
-        transition={{ duration: 0.9, ease: "easeOut" }}
-      />
-      <circle
-        cx={lastX}
-        cy={lastY}
-        r={2.25}
-        fill={color}
-        stroke="#020617"
-        strokeWidth={1}
-      />
-    </svg>
-  );
-}
-
-/** "?" icon that opens a tooltip and deep-links into /learn. */
-function GlossaryTooltip({
-  term,
-  summary,
-  articleSlug,
-}: {
-  term: string;
-  summary: string;
-  articleSlug: string;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <span className="relative ml-1 inline-flex align-middle">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        onMouseEnter={() => setOpen(true)}
-        onMouseLeave={() => setOpen(false)}
-        className="inline-flex h-4 w-4 items-center justify-center rounded-full text-slate-500 transition-colors hover:text-emerald-400"
-        aria-label={`What is ${term}?`}
-      >
-        <HelpCircle className="h-3.5 w-3.5" />
-      </button>
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, y: 4, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 4, scale: 0.98 }}
-            transition={{ duration: 0.14 }}
-            role="tooltip"
-            className="absolute left-1/2 top-full z-50 mt-2 w-64 -translate-x-1/2 rounded-lg border border-slate-700 bg-slate-900/95 p-3 text-left shadow-xl backdrop-blur-md"
-          >
-            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-emerald-400">
-              {term}
-            </div>
-            <p className="mb-2 text-xs leading-relaxed text-slate-300">
-              {summary}
-            </p>
-            <Link
-              href={`/learn/${articleSlug}`}
-              className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300"
-            >
-              Learn more →
-            </Link>
-          </motion.div>
-        )}
-      </AnimatePresence>
+    <span className={className}>
+      {prefix}{formatted}
     </span>
   );
 }
 
-/* ============================================================
-   HELPERS
-   ============================================================ */
-function getGreeting(): string {
-  const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 18) return "Good afternoon";
-  return "Good evening";
-}
-
-/** Fallback synthetic sparkline when the API doesn't give us real data. */
-function syntheticSparkline(changePct: number, seed = 10): number[] {
-  const points: number[] = [];
-  const direction = changePct >= 0 ? 1 : -1;
-  let base = 100;
-  for (let i = 0; i < 24; i++) {
-    const drift = direction * (i / 23) * Math.abs(changePct) * 0.4;
-    const noise = (Math.sin(i * seed) + Math.cos(i * (seed + 0.7))) * 0.6;
-    points.push(base + drift + noise);
-  }
-  return points;
-}
-
-/* ============================================================
-   MAIN DASHBOARD
-   ============================================================ */
-function MergedFinancialDashboard() {
-  const { firstName, hasProfile } = useUser();
-  const searchParams = useSearchParams();
-  const router = useRouter();
-
-  const [showBalance, setShowBalance] = useState(true);
-  const [isClient, setIsClient] = useState(false);
-  const [viewMode, setViewMode] = useState<"overview" | "war-room">("overview");
-  const [focusedAsset, setFocusedAsset] = useState<string | null>(null);
-
-  // Unified finance store — shared with home page
-  const finance = useFinance();
-  const {
-    monthlyIncome,
-    initialInvestment,
-    annualReturn,
-    projectionYears: years,
-    transactions,
-    addTransaction,
-    deleteTransaction,
-    update: updateFinance,
-  } = finance;
-
-  // Setters that write through the store
-  const setInitialInvestment = (v: number) => updateFinance({ initialInvestment: v });
-  const setAnnualReturn = (v: number) => updateFinance({ annualReturn: v });
-  const setYears = (v: number) => updateFinance({ projectionYears: v });
-  const setMonthlyIncome = (v: number) => updateFinance({ monthlyIncome: v });
-
-  const [newTransaction, setNewTransaction] = useState({
-    name: "",
-    category: "Housing",
-    amount: 0,
-  });
-
-  // UI states
-  const [timeRange, setTimeRange] = useState<TimeRange>("6M");
-  const [showAIModeler, setShowAIModeler] = useState(false);
-  const [simulatedSavingsGoal, setSimulatedSavingsGoal] = useState(0);
-  const [marketData, setMarketData] = useState<MarketAsset[]>([]);
-  const [isLoadingMarket, setIsLoadingMarket] = useState(true);
-  const transactionFormRef = useRef<HTMLDivElement>(null);
-  const aiModelerRef = useRef<HTMLDivElement>(null);
-  const wealthProjectionRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setIsClient(true);
-    fetchLiveMarket();
-    const interval = setInterval(fetchLiveMarket, 60000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Legacy redirect: ?settings=open now opens the global profile modal instead
-  useEffect(() => {
-    if (searchParams?.get("settings") === "open") {
-      router.replace("/dashboard?profile=open", { scroll: false });
-    }
-  }, [searchParams, router]);
-
-  // Listen for clicks from the global LiveTelemetry ticker —
-  // overlay the focused asset's correlation path on the Net Worth chart.
-  useEffect(() => {
-    const onFocus = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.symbol) {
-        setFocusedAsset(detail.symbol);
-        // Scroll the chart into view so user sees the overlay
-        document
-          .getElementById("asset-architecture")
-          ?.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-    };
-    window.addEventListener("finsight-asset-focus", onFocus);
-    return () => window.removeEventListener("finsight-asset-focus", onFocus);
-  }, []);
-
-  const fetchLiveMarket = async () => {
-    setIsLoadingMarket(true);
-    const fallback: MarketAsset[] = [
-      { id: "bitcoin", name: "Bitcoin", symbol: "BTC", price: 74710, change: 1.32, url: "https://www.coinbase.com/price/bitcoin", sparkline: syntheticSparkline(1.32, 11) },
-      { id: "ethereum", name: "Ethereum", symbol: "ETH", price: 2341.25, change: 1.06, url: "https://www.coinbase.com/price/ethereum", sparkline: syntheticSparkline(1.06, 17) },
-      { id: "solana", name: "Solana", symbol: "SOL", price: 85.25, change: 2.81, url: "https://www.coinbase.com/price/solana", sparkline: syntheticSparkline(2.81, 23) },
-    ];
-
-    try {
-      // Try the markets endpoint — it gives real 7d sparkline data in a single call.
-      const res = await fetch(
-        "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=bitcoin,ethereum,solana&sparkline=true&price_change_percentage=24h",
-        { cache: "no-store" }
-      );
-      if (!res.ok) throw new Error("bad status");
-      const data = await res.json();
-
-      if (!Array.isArray(data)) throw new Error("bad shape");
-
-      const mapped: MarketAsset[] = data.map((coin: any) => {
-        const rawSpark: number[] = coin?.sparkline_in_7d?.price ?? [];
-        // sample ~24 points from the 7d (hourly) series for a tidy sparkline
-        let spark: number[] = [];
-        if (rawSpark.length > 24) {
-          const step = Math.floor(rawSpark.length / 24);
-          for (let i = 0; i < rawSpark.length; i += step) spark.push(rawSpark[i]);
-          spark = spark.slice(-24);
-        } else {
-          spark = rawSpark;
-        }
-        const change = coin?.price_change_percentage_24h ?? 0;
-        if (spark.length < 2) spark = syntheticSparkline(change);
-        return {
-          id: coin.id,
-          name: coin.name,
-          symbol: (coin.symbol || "").toUpperCase(),
-          price: coin.current_price,
-          change,
-          url: `https://www.coinbase.com/price/${coin.id}`,
-          sparkline: spark,
-        };
-      });
-
-      setMarketData(mapped.length ? mapped : fallback);
-    } catch (e) {
-      console.error("Market data error:", e);
-      setMarketData(fallback);
-    } finally {
-      setIsLoadingMarket(false);
-    }
-  };
-
-  // Metrics
-  const totalExpenses = useMemo(
-    () => transactions.reduce((sum, t) => sum + t.amount, 0),
-    [transactions]
-  );
-
-  const totalMonthlyIncome = monthlyIncome;
-
-  const netCashFlow = useMemo(
-    () => totalMonthlyIncome - totalExpenses,
-    [totalMonthlyIncome, totalExpenses]
-  );
-
-  const currentBalance = useMemo(
-    () => initialInvestment + netCashFlow,
-    [initialInvestment, netCashFlow]
-  );
-
-  const avgMonthlySpending = useMemo(() => {
-    if (transactions.length === 0) return 0;
-    return totalExpenses / transactions.length;
-  }, [totalExpenses, transactions]);
-
-  const spendingPercentOfIncome = useMemo(() => {
-    if (totalMonthlyIncome === 0) return 0;
-    return (totalExpenses / totalMonthlyIncome) * 100;
-  }, [totalExpenses, totalMonthlyIncome]);
-
-  const savingsRate = useMemo(() => {
-    if (totalMonthlyIncome === 0) return 0;
-    return (netCashFlow / totalMonthlyIncome) * 100;
-  }, [netCashFlow, totalMonthlyIncome]);
-
-  const previousBalance = initialInvestment;
-  const balanceChange = currentBalance - previousBalance;
-  const balanceChangePercent =
-    previousBalance > 0
-      ? ((balanceChange / previousBalance) * 100).toFixed(1)
-      : "0";
-  const balancePositive = balanceChange >= 0;
-
-  const monthlyTrendData = useMemo(() => {
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
-    let balance = initialInvestment;
-    const monthlyNetFlow = netCashFlow / months.length;
-
-    // Synthetic but deterministic asset paths — seeded per symbol so the same
-    // ticker always shows the same overlay. In production, these would come
-    // from actual market data via a pricing API.
-    const assetProfiles: Record<
-      string,
-      { correlation: number; volatility: number }
-    > = {
-      SPX: { correlation: 0.85, volatility: 0.08 },
-      NDX: { correlation: 0.72, volatility: 0.14 },
-      BTC: { correlation: 0.35, volatility: 0.35 },
-      ETH: { correlation: 0.28, volatility: 0.4 },
-      GLD: { correlation: -0.15, volatility: 0.06 },
-    };
-    const focused = focusedAsset ? assetProfiles[focusedAsset] : null;
-
-    // Historical months — actual balance, no aiPath
-    const historical = months.map((month, i) => {
-      balance += monthlyNetFlow;
-      let correlationPath: number | null = null;
-      if (focused) {
-        // Deterministic "market" path centered on 1.0, scaled to user's initial balance
-        // This simulates what the balance would have done if it moved like the asset
-        const seed = (focusedAsset || "X").charCodeAt(0) + i * 7;
-        const pseudoRand = (Math.sin(seed) * 10000) % 1;
-        const assetMove = 1 + focused.correlation * 0.01 * (i + 1) + pseudoRand * focused.volatility * 0.1;
-        correlationPath = Math.round(initialInvestment * assetMove);
-      }
-      return {
-        month,
-        balance: Math.round(balance),
-        aiPath: null as number | null,
-        spending: Math.round(totalExpenses / months.length),
-        correlation: correlationPath,
-      };
-    });
-
-    // AI Probabilistic Path — next 30 days (1 month) forward projection
-    const monthlyReturn = annualReturn / 100 / 12;
-    const projectedNext = balance * (1 + monthlyReturn) + monthlyNetFlow;
-
-    const lastHistorical = historical[historical.length - 1];
-    lastHistorical.aiPath = lastHistorical.balance;
-
-    return [
-      ...historical,
-      {
-        month: "Jul (AI)",
-        balance: null as any,
-        aiPath: Math.round(projectedNext),
-        spending: 0,
-        correlation: null,
-      },
-    ];
-  }, [initialInvestment, netCashFlow, totalExpenses, annualReturn, focusedAsset]);
-
-  const compoundData = useMemo(() => {
-    const data = [];
-    for (let year = 0; year <= years; year++) {
-      const amount = currentBalance * Math.pow(1 + annualReturn / 100, year);
-      data.push({ year, amount: Math.round(amount) });
-    }
-    return data;
-  }, [currentBalance, annualReturn, years]);
-
-  const investmentTarget = useMemo(() => {
-    return Math.round(currentBalance * 1.25);
-  }, [currentBalance]);
-
-  // Real YTD portfolio growth: actual delta over initial capital.
-  // Reacts live when the user edits income, expenses, or initial investment.
-  const portfolioGrowthPct = useMemo(() => {
-    if (initialInvestment === 0) return 0;
-    return ((currentBalance - initialInvestment) / initialInvestment) * 100;
-  }, [currentBalance, initialInvestment]);
-
-  const monthlySavings = netCashFlow;
-
-  interface ProjectionPoint {
-    month: string;
-    balance: number;
-    optimized?: number;
-  }
-
-  const projectionData = useMemo(() => {
-    const monthsCount = timeRange === "3M" ? 3 : timeRange === "6M" ? 6 : 12;
-    let base = currentBalance;
-    let opt = currentBalance;
-    return Array.from({ length: monthsCount + 1 }).map((_, i): ProjectionPoint => {
-      const point: ProjectionPoint = {
-        month: i === 0 ? "Now" : `M${i}`,
-        balance: base,
-      };
-      if (showAIModeler) point.optimized = opt;
-      base += monthlySavings;
-      opt += monthlySavings + simulatedSavingsGoal;
-      return point;
-    });
-  }, [currentBalance, monthlySavings, simulatedSavingsGoal, timeRange, showAIModeler]);
-
-  // AI Insights (unchanged logic, same data model)
-  const insights = useMemo(() => {
-    const list: { title: string; type: "warning" | "success" | "info"; msg: string; val: string }[] = [];
-
-    if (totalMonthlyIncome === 0) {
-      list.push({ title: "No Income Recorded", type: "warning", msg: "Set your monthly income to track financial health.", val: "Action" });
-    } else if (spendingPercentOfIncome > 80) {
-      list.push({ title: "High Spending Alert", type: "warning", msg: `You're spending ${Math.round(spendingPercentOfIncome)}% of income. Aim for under 70%.`, val: `${Math.round(spendingPercentOfIncome)}%` });
-    } else if (spendingPercentOfIncome > 60) {
-      list.push({ title: "Spending Alert", type: "warning", msg: "Consider reducing spending to increase savings rate.", val: `${Math.round(spendingPercentOfIncome)}%` });
-    } else {
-      list.push({ title: "Healthy Spending", type: "success", msg: "You're maintaining a good spending balance.", val: `${Math.round(spendingPercentOfIncome)}%` });
-    }
-
-    if (savingsRate >= 20) {
-      list.push({ title: "Healthy Savings Rate", type: "success", msg: "You're hitting the 20% golden rule. Keep it up.", val: `${savingsRate.toFixed(1)}%` });
-    } else if (savingsRate > 0) {
-      list.push({ title: "Savings Progress", type: "warning", msg: `Current savings rate is ${savingsRate.toFixed(1)}%. Target 20% for wealth building.`, val: `${savingsRate.toFixed(1)}%` });
-    } else {
-      list.push({ title: "Deficit Alert", type: "warning", msg: "You're spending more than earning. Adjust expenses or increase income.", val: `${savingsRate.toFixed(1)}%` });
-    }
-
-    const yearsToMillion =
-      monthlySavings > 0 ? (1000000 - currentBalance) / (monthlySavings * 12) : Infinity;
-    if (yearsToMillion < 50 && yearsToMillion > 0) {
-      list.push({ title: "Millionaire Milestone", type: "info", msg: `At current rate, you'll hit $1M in ${yearsToMillion.toFixed(1)} years.`, val: "Target" });
-    }
-
-    const projectedGain = compoundData[years]?.amount - currentBalance || 0;
-    list.push({
-      title: "Wealth Projection",
-      type: "info",
-      msg: `With ${annualReturn}% annual return, gain $${Math.abs(projectedGain).toLocaleString()} in ${years} years.`,
-      val: `+${annualReturn}%`,
-    });
-
-    return list;
-  }, [savingsRate, spendingPercentOfIncome, monthlySavings, currentBalance, years, annualReturn, compoundData, totalMonthlyIncome]);
-
-  // Top insight = first warning, else first insight
-  const topInsight = useMemo(() => {
-    return insights.find((i) => i.type === "warning") ?? insights[0];
-  }, [insights]);
-
-  // "Daily Impact" driver — explains the balance change in plain language
-  const balanceDriver = useMemo(() => {
-    if (netCashFlow === 0) return "Income and expenses balanced this period.";
-    if (netCashFlow > 0) {
-      const topCategory = transactions.length > 0 ? "savings from your income" : "savings";
-      return `Up $${Math.abs(balanceChange).toLocaleString()} — driven by your monthly ${topCategory}.`;
-    }
-    // find biggest expense category to name in the narrative
-    const byCat: Record<string, number> = {};
-    transactions.forEach((t) => {
-      byCat[t.category] = (byCat[t.category] || 0) + t.amount;
-    });
-    const [topCat] = Object.entries(byCat).sort((a, b) => b[1] - a[1])[0] || [];
-    const because = topCat ? `largely driven by ${topCat.toLowerCase()} spending` : "driven by current expenses";
-    return `Down $${Math.abs(balanceChange).toLocaleString()} — ${because}.`;
-  }, [netCashFlow, balanceChange, transactions]);
-
-  // Humanized version of the top insight's narrative
-  const topInsightNarrative = useMemo(() => {
-    if (!topInsight) return "";
-    if (topInsight.type === "warning") {
-      return `We noticed ${topInsight.msg.charAt(0).toLowerCase()}${topInsight.msg.slice(1)} Click below to see what a small change could do.`;
-    }
-    return topInsight.msg;
-  }, [topInsight]);
-
-  // Handlers
-  const handleAddTransaction = () => {
-    if (!newTransaction.name || newTransaction.amount === 0) return;
-    addTransaction({
-      name: newTransaction.name,
-      category: newTransaction.category,
-      amount: Math.abs(newTransaction.amount),
-      date: new Date().toISOString().split("T")[0],
-      type: "expense",
-    });
-    setNewTransaction({ name: "", category: "Housing", amount: 0 });
-  };
-
-  const handleDeleteTransaction = (id: string) => {
-    deleteTransaction(id);
-  };
-
-  const handleExportReport = () => {
-    const reportData = [
-      ["FinSight Financial Report"],
-      ["Generated:", new Date().toLocaleDateString()],
-      [],
-      ["SUMMARY"],
-      ["Monthly Income", `$${totalMonthlyIncome.toLocaleString()}`],
-      ["Total Expenses", `$${totalExpenses.toLocaleString()}`],
-      ["Monthly Savings", `$${netCashFlow.toLocaleString()}`],
-      ["Savings Rate", `${savingsRate.toFixed(1)}%`],
-      ["Current Balance", `$${currentBalance.toLocaleString()}`],
-      [],
-      ["EXPENSES BREAKDOWN"],
-      ["Description", "Category", "Amount", "Date"],
-      ...transactions.map((t) => [t.name, t.category, `$${t.amount.toLocaleString()}`, t.date]),
-      [],
-      ["PROJECTIONS"],
-      ["Initial Investment", `$${initialInvestment.toLocaleString()}`],
-      ["Annual Return", `${annualReturn}%`],
-      ["Projected Value (1 Year)", `$${compoundData[1]?.amount.toLocaleString()}`],
-      ["Projected Value (5 Years)", `$${compoundData[5]?.amount.toLocaleString()}`],
-      ["Projected Value (10 Years)", `$${compoundData[10]?.amount.toLocaleString()}`],
-    ];
-
-    const csvContent = reportData
-      .map((row) => row.map((cell) => `"${cell}"`).join(","))
-      .join("\n");
-
-    const element = document.createElement("a");
-    element.setAttribute("href", "data:text/csv;charset=utf-8," + encodeURIComponent(csvContent));
-    element.setAttribute("download", "finsight-report.csv");
-    element.style.display = "none";
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
-  };
-
-  const handleAddTransactionClick = () => {
-    transactionFormRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  // Open the global Profile modal from anywhere in the dashboard
-  const openProfileModal = () => {
-    router.push("/dashboard?profile=open");
-  };
-
-  // Click target for the "Simulate changes" arrow on the Top Insight card.
-  // Opens the AI modeler (if closed) and scrolls it into view.
-  const handleSimulateChangesClick = () => {
-    if (!showAIModeler) setShowAIModeler(true);
-    // Give React a beat to render the newly-expanded section before scrolling
-    setTimeout(() => {
-      aiModelerRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
-    }, 150);
-  };
-
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: { opacity: 1, transition: { staggerChildren: 0.08, delayChildren: 0.1 } },
-  } as const;
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 18 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.45 } },
-  } as const;
-
-  if (!isClient) return <div className="min-h-screen bg-slate-950" />;
-
-  /* ============================================================
-     CARD BASE STYLES (toned down — subtle cards, #1E1E2E feel)
-     ============================================================ */
-  const cardBase =
-    "rounded-2xl border border-slate-800 bg-[#1E1E2E]/80 backdrop-blur-sm";
+// ─── Donut chart ─────────────────────────────────────────────────────────────
+function DonutChart({ segments }: { segments: { label: string; pct: number; color: string }[] }) {
+  const r = 54;
+  const cx = 64;
+  const cy = 64;
+  const circ = 2 * Math.PI * r;
+  let offset = 0;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50 selection:bg-emerald-500/30">
-      {/* Pinned section nav (desktop right rail / mobile bottom sheet) */}
-      <SectionNav />
-
-      {/* Subtle ambient background — toned down from previous neon glows */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(1000px_600px_at_10%_0%,rgba(16,185,129,0.05),transparent_60%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(800px_500px_at_90%_20%,rgba(6,182,212,0.04),transparent_60%)]" />
-      </div>
-
-      <div className="relative z-10 mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 sm:py-10">
-        {/* ---------- GREETING HEADER ---------- */}
-        <motion.header
-          id="snapshot"
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45 }}
-          className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"
-        >
-          <div>
-            <p className="text-sm font-medium text-slate-400">
-              {getGreeting()}
-              {hasProfile ? `, ${firstName}` : ""}
-              {hasProfile && (
-                <span className="text-slate-500">
-                  {" · "}
-                  {balancePositive
-                    ? "your portfolio is steady today"
-                    : "a few things need a look"}
-                </span>
-              )}
-            </p>
-            <h1 className="mt-1 text-2xl font-bold tracking-tight text-white sm:text-3xl">
-              Here's your financial snapshot.
-            </h1>
-            <p className="mt-1 text-xs text-slate-500">
-              {new Date().toLocaleDateString(undefined, {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* View mode toggle */}
-            <div className="flex rounded-lg border border-slate-700 bg-slate-900/60 p-1">
-              <button
-                onClick={() => setViewMode("overview")}
-                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors ${
-                  viewMode === "overview"
-                    ? "bg-slate-800 text-white"
-                    : "text-slate-500 hover:text-slate-300"
-                }`}
-                aria-label="Overview layout"
-              >
-                <LayoutGrid className="h-3.5 w-3.5" />
-                Overview
-              </button>
-              <button
-                onClick={() => setViewMode("war-room")}
-                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors ${
-                  viewMode === "war-room"
-                    ? "bg-emerald-500/15 text-emerald-300 shadow-[0_0_15px_-5px_rgba(16,185,129,0.7)]"
-                    : "text-slate-500 hover:text-slate-300"
-                }`}
-                aria-label="War Room layout"
-              >
-                <Columns3 className="h-3.5 w-3.5" />
-                War Room
-              </button>
-            </div>
-
-            {/* Guide — neutral button, not emerald gradient */}
-            <Link href="/learn">
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-2.5 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-600 hover:bg-slate-900"
-              >
-                <BookOpen className="h-4 w-4 text-slate-400" />
-                Guide
-              </motion.button>
-            </Link>
-          </div>
-        </motion.header>
-
-        {/* ---------- WAR ROOM MODE ---------- */}
-        {viewMode === "war-room" && <WarRoomView />}
-
-        {/* ---------- OVERVIEW MODE (wraps everything below) ---------- */}
-        {viewMode === "overview" && (
-          <>
-        {/* ---------- FIRST-TIME USER EMPTY STATE ---------- */}
-        {!hasProfile && (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-5 sm:flex-row sm:items-center sm:justify-between"
-          >
-            <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-500/15">
-                <Sparkles className="h-4 w-4 text-emerald-400" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-white">
-                  Welcome to FinSight — let's personalize this.
-                </p>
-                <p className="mt-0.5 text-xs text-slate-400">
-                  Add your name so your dashboard greets you properly. Takes 10
-                  seconds.
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => openProfileModal()}
-              className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400"
-            >
-              Set up profile
-              <ArrowRight className="h-3.5 w-3.5" />
-            </button>
-          </motion.div>
-        )}
-
-        {/* ---------- LIVE MARKET TICKER (with sparklines) ---------- */}
-        <div className="flex gap-3 overflow-x-auto pb-2">
-          <div className="flex flex-shrink-0 items-center gap-2 rounded-xl border border-slate-800 bg-[#1E1E2E]/80 px-4 py-3">
-            <motion.div
-              animate={{ rotate: isLoadingMarket ? 360 : 0 }}
-              transition={{ duration: 1, repeat: isLoadingMarket ? Infinity : 0 }}
-            >
-              <Globe className="h-4 w-4 text-slate-400" />
-            </motion.div>
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-              Live Markets
-            </span>
-          </div>
-
-          {marketData.map((asset) => {
-            const positive = asset.change >= 0;
-            return (
-              <a
-                key={asset.id}
-                href={asset.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group flex flex-shrink-0 items-center gap-4 rounded-xl border border-slate-800 bg-[#1E1E2E]/80 px-4 py-3 transition-colors hover:border-slate-700"
-              >
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                    {asset.symbol}
-                  </span>
-                  <span className="font-mono text-sm font-bold text-white">
-                    $
-                    {asset.price.toLocaleString(undefined, {
-                      maximumFractionDigits: 2,
-                    })}
-                  </span>
-                </div>
-                <Sparkline data={asset.sparkline} positive={positive} width={70} height={28} />
-                <div className="flex flex-col items-end">
-                  <span
-                    className={`flex items-center gap-0.5 text-xs font-bold ${
-                      positive ? "text-emerald-400" : "text-rose-400"
-                    }`}
-                  >
-                    {positive ? (
-                      <TrendingUp className="h-3 w-3" />
-                    ) : (
-                      <TrendingDown className="h-3 w-3" />
-                    )}
-                    {positive ? "+" : ""}
-                    {asset.change.toFixed(2)}%
-                  </span>
-                  <ExternalLink className="mt-1 h-3 w-3 text-slate-600 opacity-0 transition-opacity group-hover:opacity-100" />
-                </div>
-              </a>
-            );
-          })}
-        </div>
-
-        {/* ---------- HERO: TOTAL BALANCE + TOP INSIGHT ---------- */}
-        <div className="grid gap-5 lg:grid-cols-3">
-          {/* Hero balance — the BIGGEST thing on the page */}
-          <motion.section
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45 }}
-            className={`${cardBase} relative overflow-hidden p-7 lg:col-span-2`}
-          >
-            <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-emerald-500/10 blur-3xl" />
-
-            <div className="relative flex items-center justify-between">
-              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-slate-400">
-                <Wallet className="h-4 w-4 text-slate-500" />
-                Total Balance
-                <GlossaryTooltip
-                  term="Net Worth"
-                  summary="Your assets minus liabilities — the single best scoreboard for long-term financial progress."
-                  articleSlug="compound-interest"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <span
-                  className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                    balancePositive
-                      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
-                      : "border-rose-500/20 bg-rose-500/10 text-rose-400"
-                  }`}
-                >
-                  {balancePositive ? (
-                    <ArrowUpRight className="h-3.5 w-3.5" />
-                  ) : (
-                    <ArrowDownRight className="h-3.5 w-3.5" />
-                  )}
-                  {balancePositive ? "+" : ""}
-                  {balanceChangePercent}%
-                </span>
-                <button
-                  onClick={() => setShowBalance(!showBalance)}
-                  className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-800/50 hover:text-slate-300"
-                  aria-label={showBalance ? "Hide balance" : "Show balance"}
-                >
-                  {showBalance ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
-
-            {/* HERO NUMBER */}
-            <div className="mt-3">
-              <div className="font-mono text-5xl font-bold tracking-tight text-white sm:text-6xl">
-                {showBalance ? (
-                  <AnimatedNumber value={currentBalance} prefix="$" duration={800} />
-                ) : (
-                  "••••••"
-                )}
-              </div>
-              {/* Daily Impact — narrative "so what?" line */}
-              <div
-                className={`mt-2 text-sm font-medium ${
-                  balancePositive ? "text-emerald-400" : "text-rose-400"
-                }`}
-              >
-                {balancePositive ? "+" : "-"}${Math.abs(balanceChange).toLocaleString()}
-                {" · "}
-                {balancePositive ? "+" : ""}{balanceChangePercent}%
-              </div>
-              <p className="mt-1 text-xs text-slate-400">{balanceDriver}</p>
-            </div>
-
-            {/* Quick stats */}
-            <div className="mt-7 grid grid-cols-3 gap-4 border-t border-slate-800 pt-5">
-              <div>
-                <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">
-                  Monthly Income
-                </div>
-                <div className="mt-1 font-mono text-lg font-bold text-white">
-                  ${totalMonthlyIncome.toLocaleString()}
-                </div>
-              </div>
-              <div>
-                <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">
-                  Expenses
-                </div>
-                <div className="mt-1 font-mono text-lg font-bold text-white">
-                  ${totalExpenses.toLocaleString()}
-                </div>
-              </div>
-              <div>
-                <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">
-                  Savings Rate
-                  <GlossaryTooltip
-                    term="Savings Rate"
-                    summary="Share of your net income you keep. 20%+ is the baseline for real wealth accumulation."
-                    articleSlug="50-30-20-framework"
-                  />
-                </div>
-                <div
-                  className={`mt-1 font-mono text-lg font-bold ${
-                    savingsRate >= 20
-                      ? "text-emerald-400"
-                      : savingsRate > 0
-                      ? "text-amber-400"
-                      : "text-rose-400"
-                  }`}
-                >
-                  {savingsRate.toFixed(1)}%
-                </div>
-              </div>
-            </div>
-          </motion.section>
-
-          {/* Top Insight of the Day */}
-          <motion.aside
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45, delay: 0.08 }}
-            className="relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/[0.08] to-[#1E1E2E]/80 p-6"
-          >
-            <div className="mb-3 flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-500/15">
-                <Sparkles className="h-4 w-4 text-emerald-400" />
-              </div>
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-emerald-300">
-                AI Insight of the Day
-              </span>
-            </div>
-
-            <h3 className="mb-2 text-lg font-bold leading-snug text-white">
-              {topInsight?.title}
-            </h3>
-            <p className="mb-4 text-sm leading-relaxed text-slate-300">
-              {topInsightNarrative}
-            </p>
-
-            <button
-              onClick={handleSimulateChangesClick}
-              className="group inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-sm font-semibold text-emerald-300 transition-all hover:border-emerald-400/50 hover:bg-emerald-500/20 hover:text-emerald-200"
-            >
-              Simulate changes
-              <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
-            </button>
-          </motion.aside>
-        </div>
-
-        {/* ---------- SECONDARY METRICS (compact cards) ---------- */}
-        <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-          className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
-        >
-          {/* Capital Outflow (formerly Avg Monthly Spending) */}
-          <motion.div variants={itemVariants} className={`${cardBase} p-5`}>
-            <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-slate-400">
-              <Target className="h-4 w-4 text-slate-500" />
-              Capital Outflow · Monthly
-            </div>
-            <div className="font-mono text-2xl font-bold text-white">
-              ${Math.round(avgMonthlySpending).toLocaleString()}
-            </div>
-            <p className="mt-1 text-xs text-slate-500">
-              {Math.round(spendingPercentOfIncome)}% of income
-            </p>
-          </motion.div>
-
-          {/* Savings Rate */}
-          <motion.div variants={itemVariants} className={`${cardBase} p-5`}>
-            <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-slate-400">
-              <TrendingUp className="h-4 w-4 text-slate-500" />
-              Current Savings Rate
-            </div>
-            <div
-              className={`font-mono text-2xl font-bold ${
-                savingsRate >= 20
-                  ? "text-emerald-400"
-                  : savingsRate > 0
-                  ? "text-amber-400"
-                  : "text-rose-400"
-              }`}
-            >
-              {savingsRate.toFixed(1)}%
-            </div>
-            <p className="mt-1 text-xs text-slate-500">
-              {savingsRate >= 20
-                ? "Above 20% target"
-                : savingsRate > 0
-                ? "Push toward 20%"
-                : "Negative rate"}
-            </p>
-          </motion.div>
-
-          {/* Investment Growth — shows ACTUAL computed balance change */}
-          <motion.button
-            variants={itemVariants}
-            onClick={() => {
-              wealthProjectionRef.current?.scrollIntoView({
-                behavior: "smooth",
-                block: "start",
-              });
-            }}
-            className={`${cardBase} group p-5 text-left transition-all hover:border-emerald-500/30 hover:shadow-[0_0_25px_-10px_rgba(16,185,129,0.5)]`}
-            aria-label="Open wealth projection simulator"
-          >
-            <div className="mb-3 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-slate-400">
-                <ArrowUpRight className="h-4 w-4 text-slate-500" />
-                Portfolio Growth
-              </div>
-              <ArrowRight className="h-4 w-4 text-slate-600 transition-all group-hover:translate-x-0.5 group-hover:text-emerald-400" />
-            </div>
-            <div
-              className={`font-mono text-2xl font-bold ${
-                portfolioGrowthPct >= 0 ? "text-emerald-400" : "text-rose-400"
-              }`}
-            >
-              {portfolioGrowthPct >= 0 ? "+" : ""}
-              {portfolioGrowthPct.toFixed(2)}%
-            </div>
-            <p className="mt-1 text-xs text-slate-500">
-              {portfolioGrowthPct >= 0 ? "+" : "-"}$
-              {Math.abs(currentBalance - initialInvestment).toLocaleString()} · tap to simulate
-            </p>
-          </motion.button>
-        </motion.div>
-
-        {/* ---------- MAIN GRID: Charts + Sidebar ---------- */}
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-          {/* LEFT COLUMN */}
-          <div className="space-y-5 lg:col-span-2">
-            {/* Net Worth Trend */}
-            <motion.div
-              id="asset-architecture"
-              variants={itemVariants}
-              initial="hidden"
-              animate="visible"
-              className={`${cardBase} p-6`}
-            >
-              <div className="mb-5 flex items-start justify-between">
-                <div>
-                  <h2 className="text-lg font-bold text-white">Asset Architecture</h2>
-                  <p className="text-xs text-slate-500">
-                    6-month historical path with AI probabilistic projection
-                  </p>
-                </div>
-                {focusedAsset && (
-                  <motion.button
-                    initial={{ opacity: 0, x: 5 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    onClick={() => setFocusedAsset(null)}
-                    className="group flex items-center gap-2 rounded-lg border border-purple-500/30 bg-purple-500/10 px-2.5 py-1 text-xs font-semibold text-purple-300 transition-colors hover:bg-purple-500/20"
-                  >
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-purple-400" />
-                    Overlay: {focusedAsset}
-                    <X className="h-3 w-3 opacity-60 group-hover:opacity-100" />
-                  </motion.button>
-                )}
-              </div>
-              <div className="h-[280px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={monthlyTrendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                    <XAxis dataKey="month" stroke="#64748b" fontSize={11} />
-                    <YAxis
-                      stroke="#64748b"
-                      fontSize={11}
-                      tickFormatter={(v) => `$${v / 1000}k`}
-                    />
-                    <Tooltip
-                      cursor={{ stroke: "#10b981", strokeDasharray: "4 4", strokeOpacity: 0.5 }}
-                      contentStyle={{
-                        backgroundColor: "rgba(15, 23, 42, 0.95)",
-                        border: "1px solid rgba(16, 185, 129, 0.3)",
-                        borderRadius: "8px",
-                        backdropFilter: "blur(8px)",
-                      }}
-                      labelStyle={{ color: "#f1f5f9", fontWeight: 700, marginBottom: 4 }}
-                      formatter={(value: any, name: any) => [
-                        `$${Number(value).toLocaleString()}`,
-                        name === "balance"
-                          ? "Balance"
-                          : name === "aiPath"
-                          ? "AI Path"
-                          : name === "correlation"
-                          ? `${focusedAsset} Correlation`
-                          : "Spending",
-                      ]}
-                    />
-                    <Legend />
-                    <Line
-                      type="monotone"
-                      dataKey="balance"
-                      stroke="#10b981"
-                      dot={{ fill: "#10b981", r: 4 }}
-                      activeDot={{ r: 6, fill: "#10b981", stroke: "#020617", strokeWidth: 2 }}
-                      strokeWidth={2.5}
-                      name="Balance"
-                      connectNulls={false}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="aiPath"
-                      stroke="#06b6d4"
-                      strokeWidth={2.5}
-                      strokeDasharray="6 4"
-                      dot={{ fill: "#06b6d4", r: 3 }}
-                      activeDot={{ r: 5, fill: "#06b6d4", stroke: "#020617", strokeWidth: 2 }}
-                      name="AI Probabilistic Path"
-                      connectNulls={true}
-                    />
-                    {focusedAsset && (
-                      <Line
-                        type="monotone"
-                        dataKey="correlation"
-                        stroke="#a855f7"
-                        strokeWidth={2}
-                        strokeDasharray="2 3"
-                        dot={{ fill: "#a855f7", r: 3 }}
-                        activeDot={{ r: 5, fill: "#a855f7", stroke: "#020617", strokeWidth: 2 }}
-                        name={`${focusedAsset} Correlation`}
-                        connectNulls={true}
-                      />
-                    )}
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-              <p className="mt-3 text-xs text-slate-500">
-                💡 {focusedAsset
-                  ? `Purple overlay: ${focusedAsset} correlation path. Click its ticker at the bottom again or the × to clear.`
-                  : "Click any ticker in the telemetry bar to overlay its correlation path."}
-              </p>
-            </motion.div>
-
-            {/* Wealth Projection */}
-            <motion.section
-              id="wealth-projection"
-              ref={wealthProjectionRef}
-              variants={itemVariants}
-              initial="hidden"
-              animate="visible"
-              className={`${cardBase} p-6`}
-            >
-              <div className="mb-6 flex items-center justify-between">
-                <h2 className="flex items-center gap-2 text-lg font-bold text-white">
-                  <BarChart3 className="h-4 w-4 text-slate-400" />
-                  Wealth Projection
-                </h2>
-                <div className="flex rounded-lg border border-slate-800 bg-slate-950/60 p-1">
-                  {(["3M", "6M", "12M"] as TimeRange[]).map((r) => (
-                    <button
-                      key={r}
-                      onClick={() => setTimeRange(r)}
-                      className={`rounded-md px-3 py-1 text-xs font-bold transition-all ${
-                        timeRange === r
-                          ? "bg-slate-800 text-white"
-                          : "text-slate-500 hover:text-slate-300"
-                      }`}
-                    >
-                      {r}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mb-6 h-[280px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={projectionData}>
-                    <defs>
-                      <linearGradient id="colorBal" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                    <XAxis dataKey="month" stroke="#64748b" fontSize={11} />
-                    <YAxis
-                      stroke="#64748b"
-                      fontSize={11}
-                      tickFormatter={(v) => `$${v / 1000}k`}
-                    />
-                    <Tooltip
-                      cursor={{ stroke: "#10b981", strokeDasharray: "4 4", strokeOpacity: 0.5 }}
-                      contentStyle={{
-                        backgroundColor: "rgba(15, 23, 42, 0.95)",
-                        border: "1px solid rgba(16, 185, 129, 0.3)",
-                        borderRadius: "8px",
-                        backdropFilter: "blur(8px)",
-                      }}
-                      labelStyle={{ color: "#f1f5f9", fontWeight: 700, marginBottom: 4 }}
-                      formatter={(value: any) =>
-                        `$${Number(value).toLocaleString()}`
-                      }
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="balance"
-                      stroke="#10b981"
-                      fillOpacity={1}
-                      fill="url(#colorBal)"
-                      strokeWidth={2.5}
-                      activeDot={{ r: 6, fill: "#10b981", stroke: "#020617", strokeWidth: 2 }}
-                    />
-                    {showAIModeler && (
-                      <Area
-                        type="monotone"
-                        dataKey="optimized"
-                        stroke="#06b6d4"
-                        fill="transparent"
-                        strokeWidth={2}
-                        strokeDasharray="5 5"
-                      />
-                    )}
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Simulation Controls */}
-              <div className="grid grid-cols-1 gap-6 border-t border-slate-800 pt-6 md:grid-cols-2">
-                <div className="space-y-5">
-                  <Slider
-                    label="Initial Capital"
-                    val={initialInvestment}
-                    sym="$"
-                    min={1000}
-                    max={500000}
-                    step={5000}
-                    onChange={setInitialInvestment}
-                  />
-                  <Slider
-                    label="Est. Annual Return"
-                    val={annualReturn}
-                    sym="%"
-                    min={1}
-                    max={15}
-                    step={0.5}
-                    onChange={setAnnualReturn}
-                  />
-                </div>
-                <div className="space-y-4">
-                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                      Total After {years} Years
-                    </p>
-                    <p className="mt-1 font-mono text-2xl font-bold text-white">
-                      ${compoundData[years]?.amount.toLocaleString()}
-                    </p>
-                  </div>
-                  <motion.button
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.99 }}
-                    onClick={() => setShowAIModeler(!showAIModeler)}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3.5 text-sm font-semibold text-slate-950 shadow-[0_0_20px_-8px_rgba(16,185,129,0.6)] transition-all hover:bg-emerald-400"
-                  >
-                    <Filter className="h-4 w-4" />
-                    {showAIModeler ? "Hide AI Scenarios" : "Simulate Budget Changes"}
-                  </motion.button>
-                </div>
-              </div>
-            </motion.section>
-
-            {/* AI Optimizer */}
-            <div ref={aiModelerRef}>
-            <AnimatePresence>
-              {showAIModeler && (
-                <motion.section
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="overflow-hidden rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.05] p-6"
-                >
-                  <h3 className="mb-5 flex items-center gap-2 text-base font-bold text-emerald-400">
-                    <Target className="h-4 w-4" /> Cash Flow Optimization
-                  </h3>
-                  <div className="grid gap-8 md:grid-cols-2">
-                    <Slider
-                      label="Additional Monthly Savings"
-                      val={simulatedSavingsGoal}
-                      sym="$"
-                      min={0}
-                      max={5000}
-                      step={100}
-                      onChange={setSimulatedSavingsGoal}
-                    />
-                    <div className="flex items-center gap-4">
-                      <div className="h-12 w-1 rounded-full bg-emerald-500" />
-                      <p className="text-sm leading-relaxed text-slate-300">
-                        Saving an extra{" "}
-                        <span className="font-bold text-emerald-400">
-                          ${simulatedSavingsGoal}
-                        </span>{" "}
-                        per month increases net worth by{" "}
-                        <span className="font-bold text-white">
-                          $
-                          {(
-                            simulatedSavingsGoal *
-                            (timeRange === "3M" ? 3 : timeRange === "6M" ? 6 : 12)
-                          ).toLocaleString()}
-                        </span>{" "}
-                        over this period.
-                      </p>
-                    </div>
-                  </div>
-                </motion.section>
-              )}
-            </AnimatePresence>
-            </div>
-          </div>
-
-          {/* RIGHT SIDEBAR */}
-          <aside className="space-y-5">
-            {/* Parameters */}
-            <motion.div
-              variants={itemVariants}
-              initial="hidden"
-              animate="visible"
-              className={`${cardBase} p-5`}
-            >
-              <h3 className="mb-5 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-300">
-                <Settings2 className="h-4 w-4 text-slate-500" /> Parameters
-              </h3>
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                    Monthly Income
-                  </label>
-                  <input
-                    type="number"
-                    value={monthlyIncome}
-                    onChange={(e) => setMonthlyIncome(Number(e.target.value))}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3.5 py-2.5 font-mono text-sm text-white outline-none transition-colors focus:border-emerald-500/50"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                    Initial Investment
-                  </label>
-                  <input
-                    type="number"
-                    value={initialInvestment}
-                    onChange={(e) => setInitialInvestment(Number(e.target.value))}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3.5 py-2.5 font-mono text-sm text-white outline-none transition-colors focus:border-emerald-500/50"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                    Investment Years
-                  </label>
-                  <input
-                    type="number"
-                    value={years}
-                    onChange={(e) => setYears(Number(e.target.value))}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3.5 py-2.5 font-mono text-sm text-white outline-none transition-colors focus:border-emerald-500/50"
-                  />
-                </div>
-              </div>
-            </motion.div>
-
-            {/* AI Insights list */}
-            <motion.div
-              variants={itemVariants}
-              initial="hidden"
-              animate="visible"
-              className={`${cardBase} relative overflow-hidden p-5`}
-            >
-              <div className="absolute right-4 top-4 opacity-5">
-                <Lightbulb className="h-10 w-10" />
-              </div>
-              <h3 className="mb-4 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-300">
-                <Sparkles className="h-4 w-4 text-emerald-400" />
-                AI Intelligence
-              </h3>
-              <div className="max-h-[380px] space-y-3 overflow-y-auto pr-1">
-                {insights.map((insight, i) => {
-                  const isWarning = insight.type === "warning";
-                  const isSuccess = insight.type === "success";
-                  const pill = isWarning
-                    ? "bg-amber-500/15 text-amber-400 border-amber-500/20"
-                    : isSuccess
-                    ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/20"
-                    : "bg-slate-500/15 text-slate-300 border-slate-500/20";
-                  return (
-                    <motion.div
-                      key={i}
-                      initial={{ opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.06 }}
-                      className="rounded-lg border border-slate-800 bg-slate-950/40 p-3.5"
-                    >
-                      <div className="mb-1.5 flex items-start justify-between gap-2">
-                        <h4 className="text-sm font-semibold text-white">
-                          {insight.title}
-                        </h4>
-                        <span
-                          className={`flex-shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold ${pill}`}
-                        >
-                          {insight.val}
-                        </span>
-                      </div>
-                      <p className="text-xs leading-relaxed text-slate-400">
-                        {insight.msg}
-                      </p>
-                    </motion.div>
-                  );
-                })}
-              </div>
-            </motion.div>
-          </aside>
-        </div>
-
-        {/* ---------- MARKET PULSE (Fear / Greed) ---------- */}
-        <motion.section
-          initial={{ opacity: 0, y: 12 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.45 }}
-          className={`${cardBase} p-6`}
-        >
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <h2 className="flex items-center gap-2 text-lg font-bold text-white">
-                <Activity className="h-4 w-4 text-slate-400" />
-                Market Pulse
-              </h2>
-              <p className="text-xs text-slate-500">
-                Crowd sentiment from price action across major assets
-              </p>
-            </div>
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-              Updated now
-            </span>
-          </div>
-          <FearGreedMeter marketData={marketData} />
-        </motion.section>
-
-        {/* ---------- RISK HEATMAP + MARKET PULSE + SCENARIO SLIDER ---------- */}
-        <div className="grid gap-5 lg:grid-cols-6">
-          {/* Risk Heatmap */}
-          <motion.section
-            initial={{ opacity: 0, y: 12 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.45 }}
-            className={`${cardBase} p-6 lg:col-span-3`}
-          >
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-bold text-white">Portfolio Risk Map</h2>
-                <p className="text-xs text-slate-500">
-                  Sectors colored by volatility — darker red = higher risk today
-                </p>
-              </div>
-              <Link
-                href="/learn/the-art-of-asset-allocation"
-                className="flex items-center gap-1 text-xs font-semibold text-emerald-400 hover:text-emerald-300"
-              >
-                Manage risk
-                <ArrowRight className="h-3 w-3" />
-              </Link>
-            </div>
-            <RiskHeatmap />
-          </motion.section>
-
-          {/* Market Pulse — Fear/Greed sentiment gauge */}
-          <motion.section
-            id="market-pulse"
-            initial={{ opacity: 0, y: 12 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.45, delay: 0.08 }}
-            className={`${cardBase} flex flex-col items-center justify-center p-6 lg:col-span-1`}
-          >
-            <MarketPulse />
-            <p className="mt-3 text-center text-[11px] leading-relaxed text-slate-500">
-              Aggregate sentiment from volatility, momentum, and flow data.
-            </p>
-          </motion.section>
-
-          {/* What-If Scenario Slider */}
-          <motion.section
-            initial={{ opacity: 0, y: 12 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.45, delay: 0.15 }}
-            className={`${cardBase} p-6 lg:col-span-2`}
-          >
-            <div className="mb-4">
-              <h2 className="flex items-center gap-2 text-lg font-bold text-white">
-                <Filter className="h-4 w-4 text-slate-400" />
-                What-If Scenario
-              </h2>
-              <p className="text-xs text-slate-500">
-                Turn the dashboard into a windshield.
-              </p>
-            </div>
-            <ScenarioSlider
-              currentBalance={currentBalance}
-              currentMonthlySavings={monthlySavings}
-              annualReturn={annualReturn}
-            />
-          </motion.section>
-        </div>
-
-        {/* ---------- ADVANCED INTELLIGENCE (Autonomous Layer) ---------- */}
-        <div className="grid gap-5 lg:grid-cols-2">
-          {/* Liquidity Forecast */}
-          <motion.section
-            initial={{ opacity: 0, y: 12 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.45 }}
-            className={`${cardBase} p-6`}
-          >
-            <LiquidityForecast
-              currentBalance={currentBalance}
-              monthlyNetFlow={monthlySavings}
-            />
-          </motion.section>
-
-          {/* Monte Carlo */}
-          <motion.section
-            id="stress-test"
-            initial={{ opacity: 0, y: 12 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.45, delay: 0.08 }}
-            className={`${cardBase} p-6`}
-          >
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-white">Monte Carlo Stress Test</h2>
-              <span className="font-mono text-[10px] text-slate-500">
-                GBM · 10k trials
-              </span>
-            </div>
-            <MonteCarloSim
-              initialBalance={currentBalance}
-              monthlyContribution={monthlySavings}
-              annualReturn={annualReturn}
-            />
-          </motion.section>
-        </div>
-
-        {/* ---------- DEEP INTEGRATIONS ---------- */}
-        <div className="grid gap-5 lg:grid-cols-2">
-          {/* Tax-Loss Harvest */}
-          <motion.section
-            id="tax-scanner"
-            initial={{ opacity: 0, y: 12 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.45 }}
-            className={`${cardBase} p-6`}
-          >
-            <TaxLossHarvest />
-          </motion.section>
-
-          {/* Blockchain Indexer */}
-          <motion.section
-            initial={{ opacity: 0, y: 12 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.45, delay: 0.08 }}
-            className={`${cardBase} p-6`}
-          >
-            <BlockchainIndexer />
-          </motion.section>
-        </div>
-
-        <div className="grid gap-5 lg:grid-cols-2">
-          {/* Webhook Guardrails */}
-          <motion.section
-            initial={{ opacity: 0, y: 12 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.45 }}
-            className={`${cardBase} p-6`}
-          >
-            <WebhookGuardrails />
-          </motion.section>
-
-          {/* OCR Upload */}
-          <motion.section
-            initial={{ opacity: 0, y: 12 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.45, delay: 0.08 }}
-            className={`${cardBase} p-6`}
-          >
-            <OcrUpload />
-          </motion.section>
-        </div>
-
-        {/* Security Sovereignty spans full width */}
-        <motion.section
-          id="security-vault"
-          initial={{ opacity: 0, y: 12 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.45 }}
-          className={`${cardBase} p-6`}
-        >
-          <SecuritySovereignty />
-        </motion.section>
-
-        {/* ---------- EXPENSES + QUICK ACTIONS ---------- */}
-        <motion.div
-          variants={itemVariants}
-          initial="hidden"
-          animate="visible"
-          className="grid gap-5 lg:grid-cols-3"
-        >
-          {/* Expenses */}
-          <div
-            ref={transactionFormRef}
-            className={`${cardBase} p-6 lg:col-span-2`}
-          >
-            <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-white">Ledger Events</h2>
-              <span className="text-xs text-slate-500">
-                {transactions.length} events · ${totalExpenses.toLocaleString()}
-              </span>
-            </div>
-
-            {/* Add form */}
-            <div className="mb-6 rounded-lg border border-slate-800 bg-slate-950/40 p-4">
-              <h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400">
-                <Plus className="h-3.5 w-3.5" /> Add Ledger Event
-              </h3>
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
-                <input
-                  type="text"
-                  placeholder="Description"
-                  value={newTransaction.name}
-                  onChange={(e) =>
-                    setNewTransaction({ ...newTransaction, name: e.target.value })
-                  }
-                  className="rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-emerald-500/50"
-                />
-                <select
-                  value={newTransaction.category}
-                  onChange={(e) =>
-                    setNewTransaction({ ...newTransaction, category: e.target.value })
-                  }
-                  className="rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-emerald-500/50"
-                >
-                  <option value="Housing">Housing</option>
-                  <option value="Food">Food</option>
-                  <option value="Transportation">Transportation</option>
-                  <option value="Entertainment">Entertainment</option>
-                  <option value="Utilities">Utilities</option>
-                  <option value="Healthcare">Healthcare</option>
-                  <option value="Other">Other</option>
-                </select>
-                <input
-                  type="number"
-                  placeholder="Amount"
-                  value={newTransaction.amount}
-                  onChange={(e) =>
-                    setNewTransaction({
-                      ...newTransaction,
-                      amount: Number(e.target.value),
-                    })
-                  }
-                  className="rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 font-mono text-sm text-white outline-none transition-colors focus:border-emerald-500/50"
-                />
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={handleAddTransaction}
-                  className="rounded-lg bg-emerald-500 py-2 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400"
-                >
-                  Add
-                </motion.button>
-              </div>
-            </div>
-
-            {/* List */}
-            <div className="max-h-[380px] space-y-2 overflow-y-auto pr-1">
-              {transactions.length === 0 ? (
-                <p className="py-8 text-center text-sm text-slate-500">
-                  No expenses yet. Add one to get started.
-                </p>
-              ) : (
-                transactions.map((tx) => (
-                  <motion.div
-                    key={tx.id}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 10 }}
-                    className="group flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950/30 p-3.5 transition-colors hover:border-slate-700"
-                  >
-                    <div className="flex min-w-0 flex-1 items-center gap-3">
-                      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-rose-500/20 bg-rose-500/10">
-                        <ArrowDownRight className="h-4 w-4 text-rose-400" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-white">
-                          {tx.name}
-                        </p>
-                        <p className="text-xs text-slate-500">{tx.category}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="text-right">
-                        <p className="font-mono text-sm font-bold text-rose-400">
-                          -${tx.amount.toLocaleString()}
-                        </p>
-                        <p className="text-[11px] text-slate-500">{tx.date}</p>
-                      </div>
-                      <motion.button
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => handleDeleteTransaction(tx.id)}
-                        className="rounded-lg p-1.5 text-slate-500 opacity-0 transition-all hover:bg-rose-500/10 hover:text-rose-400 group-hover:opacity-100"
-                        aria-label="Delete expense"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </motion.button>
-                    </div>
-                  </motion.div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Quick actions — toned down, all neutral, primary is emerald */}
-          <div className={`${cardBase} h-fit p-6`}>
-            <h2 className="mb-4 text-lg font-bold text-white">Quick Actions</h2>
-            <div className="space-y-2">
-              {/* Primary action — emerald */}
-              <motion.button
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.99 }}
-                onClick={handleAddTransactionClick}
-                className="group flex w-full items-center justify-between gap-2 rounded-lg bg-emerald-500 px-4 py-3 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400"
-              >
-                <span className="flex items-center gap-2">
-                  <Plus className="h-4 w-4" />
-                  Add Transaction
-                </span>
-                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-              </motion.button>
-
-              {/* Secondary — neutral */}
-              <Link href="/learn">
-                <motion.button
-                  whileHover={{ x: 2 }}
-                  className="group mt-2 flex w-full items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-700 hover:bg-slate-900"
-                >
-                  <span className="flex items-center gap-2">
-                    <BookOpen className="h-4 w-4 text-slate-400" />
-                    Open Guide
-                  </span>
-                  <ArrowUpRight className="h-4 w-4 text-slate-500 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
-                </motion.button>
-              </Link>
-
-              <motion.button
-                whileHover={{ x: 2 }}
-                onClick={handleExportReport}
-                className="group flex w-full items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-700 hover:bg-slate-900"
-              >
-                <span className="flex items-center gap-2">
-                  <Download className="h-4 w-4 text-slate-400" />
-                  Export Report
-                </span>
-                <ArrowRight className="h-4 w-4 text-slate-500 transition-transform group-hover:translate-x-0.5" />
-              </motion.button>
-
-              <motion.button
-                whileHover={{ x: 2 }}
-                onClick={() => openProfileModal()}
-                className="group flex w-full items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-700 hover:bg-slate-900"
-              >
-                <span className="flex items-center gap-2">
-                  <Settings2 className="h-4 w-4 text-slate-400" />
-                  Settings
-                </span>
-                <ArrowRight className="h-4 w-4 text-slate-500 transition-transform group-hover:translate-x-0.5" />
-              </motion.button>
-            </div>
-
-            {/* Small educational nudge */}
-            <div className="mt-5 rounded-lg border border-slate-800 bg-slate-950/40 p-3">
-              <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
-                <Lightbulb className="h-3 w-3" /> Tip
-              </div>
-              <p className="text-xs leading-relaxed text-slate-400">
-                New to asset allocation? Our{" "}
-                <Link
-                  href="/learn/the-art-of-asset-allocation"
-                  className="font-semibold text-emerald-400 hover:text-emerald-300"
-                >
-                  7-min lesson
-                </Link>{" "}
-                explains the 70/20/10 portfolio.
-              </p>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* ---------- BOTTOM CTA ---------- */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-          className="rounded-2xl border border-slate-800 bg-[#1E1E2E]/80 p-8 text-center backdrop-blur-sm"
-        >
-          <h3 className="text-xl font-bold text-white sm:text-2xl">
-            Master Your Finances
-          </h3>
-          <p className="mx-auto mt-2 max-w-xl text-sm text-slate-400">
-            Explore our lessons on wealth-building, investment optimization, and
-            tax-efficient strategies.
-          </p>
-          <Link href="/learn">
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className="mt-5 inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-6 py-3 text-sm font-semibold text-slate-950 shadow-[0_0_20px_-8px_rgba(16,185,129,0.6)] transition-all hover:bg-emerald-400"
-            >
-              Explore the Guide
-              <ArrowRight className="h-4 w-4" />
-            </motion.button>
-          </Link>
-        </motion.div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ============================================================
-   Slider helper (unchanged API)
-   ============================================================ */
-function Slider({
-  label,
-  val,
-  sym,
-  min,
-  max,
-  step,
-  onChange,
-}: {
-  label: string;
-  val: number;
-  sym: string;
-  min: number;
-  max: number;
-  step: number;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <div className="space-y-2.5">
-      {label && (
-        <div className="flex items-baseline justify-between text-xs font-semibold">
-          <span className="text-slate-400">{label}</span>
-          <span className="font-mono text-sm font-bold text-white">
-            {sym === "$" ? `$${val.toLocaleString()}` : `${val}${sym}`}
-          </span>
-        </div>
-      )}
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={val}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-slate-800 accent-emerald-500"
-      />
-    </div>
-  );
-}
-
-/* ============================================================
-   Risk Heatmap — portfolio sector volatility grid
-   ============================================================ */
-function RiskHeatmap() {
-  // Now wired to the real finance store — sectors are user-editable.
-  const { sectors, updateSector } = useFinance();
-  const [editing, setEditing] = useState<string | null>(null);
-
-  // Risk → color: green (low) → amber (med) → red (high)
-  const riskColor = (risk: number) => {
-    if (risk < 30) return "bg-emerald-500/70";
-    if (risk < 50) return "bg-emerald-600/60";
-    if (risk < 65) return "bg-amber-500/70";
-    if (risk < 75) return "bg-orange-500/75";
-    return "bg-rose-500/80";
-  };
-
-  const riskLabel = (risk: number) => {
-    if (risk < 30) return "Low";
-    if (risk < 50) return "Moderate";
-    if (risk < 65) return "Elevated";
-    return "High";
-  };
-
-  const totalWeight = sectors.reduce((s, sec) => s + sec.weight, 0);
-
-  return (
-    <div>
-      <div className="grid grid-cols-4 gap-2">
-        {sectors.map((s) => {
-          const positive = s.change >= 0;
-          const isEditing = editing === s.name;
-          return (
-            <div
-              key={s.name}
-              className={`group relative flex flex-col justify-between overflow-hidden rounded-lg border border-slate-800 p-3 transition-all hover:scale-[1.02] ${riskColor(
-                s.risk
-              )}`}
-              title={`${s.name}: ${riskLabel(s.risk)} risk · ${s.weight}% of portfolio · click to edit`}
-              onClick={() => setEditing(isEditing ? null : s.name)}
-            >
-              <div className="absolute inset-0 bg-slate-950/55" />
-              <div className="relative cursor-pointer">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-200/90">
-                  {s.name}
-                </div>
-                <div className="mt-0.5 font-mono text-sm font-bold text-white">
-                  {s.weight}%
-                </div>
-              </div>
-              <div className="relative mt-2 flex items-center justify-between">
-                <span className="text-[10px] font-semibold text-slate-100/80">
-                  {riskLabel(s.risk)}
-                </span>
-                <span
-                  className={`text-[10px] font-bold ${
-                    positive ? "text-emerald-300" : "text-rose-300"
-                  }`}
-                >
-                  {positive ? "+" : ""}
-                  {s.change.toFixed(1)}%
-                </span>
-              </div>
-
-              {/* Inline edit panel */}
-              {isEditing && (
-                <div
-                  className="absolute inset-0 z-10 flex flex-col justify-center gap-1.5 bg-slate-950/95 p-2 backdrop-blur-sm"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <label className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">
-                    Weight %
-                    <input
-                      type="number"
-                      value={s.weight}
-                      onChange={(e) =>
-                        updateSector(s.name, {
-                          weight: Math.max(0, Number(e.target.value)),
-                        })
-                      }
-                      className="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1 py-0.5 font-mono text-[10px] text-white outline-none focus:border-emerald-500/50"
-                    />
-                  </label>
-                  <label className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">
-                    Risk 0-100
-                    <input
-                      type="number"
-                      value={s.risk}
-                      min={0}
-                      max={100}
-                      onChange={(e) =>
-                        updateSector(s.name, {
-                          risk: Math.min(100, Math.max(0, Number(e.target.value))),
-                        })
-                      }
-                      className="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1 py-0.5 font-mono text-[10px] text-white outline-none focus:border-emerald-500/50"
-                    />
-                  </label>
-                  <button
-                    onClick={() => setEditing(null)}
-                    className="mt-1 rounded bg-emerald-500 py-0.5 text-[10px] font-semibold text-slate-950 hover:bg-emerald-400"
-                  >
-                    Done
-                  </button>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Legend + total weight */}
-      <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-800 pt-3 text-[10px] text-slate-400">
-        <span className="font-semibold uppercase tracking-wider">Risk scale</span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-sm bg-emerald-500/70" /> Low
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-sm bg-amber-500/70" /> Moderate
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-sm bg-orange-500/75" /> Elevated
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-sm bg-rose-500/80" /> High
-        </span>
-        <span className="ml-auto font-mono">
-          Σ = {totalWeight}%
-          {totalWeight !== 100 && (
-            <span className="ml-1 text-amber-400">(not 100)</span>
-          )}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-/* ============================================================
-   Scenario Slider — "If I invest $X more/month, when do I hit $Y?"
-   ============================================================ */
-function ScenarioSlider({
-  currentBalance,
-  currentMonthlySavings,
-  annualReturn,
-}: {
-  currentBalance: number;
-  currentMonthlySavings: number;
-  annualReturn: number;
-}) {
-  const [extra, setExtra] = useState(500);
-  const [goal, setGoal] = useState(100000);
-
-  // Solve for number of months with monthly compounding.
-  // FV = PV*(1+r)^n + PMT*[((1+r)^n - 1)/r]
-  // We just iterate — simpler, and the numbers are small.
-  const { monthsToGoal, totalContribution, gained } = (() => {
-    const r = annualReturn / 100 / 12;
-    const pmt = currentMonthlySavings + extra;
-    let balance = currentBalance;
-    let months = 0;
-    const cap = 12 * 80; // 80 year sanity cap
-    if (balance >= goal) {
-      return { monthsToGoal: 0, totalContribution: 0, gained: 0 };
-    }
-    while (balance < goal && months < cap) {
-      balance = balance * (1 + r) + pmt;
-      months++;
-    }
-    const reached = months < cap;
-    return {
-      monthsToGoal: reached ? months : Infinity,
-      totalContribution: pmt * months,
-      gained: balance - (currentBalance + pmt * months),
-    };
-  })();
-
-  const years = monthsToGoal / 12;
-  const displayTime = !isFinite(monthsToGoal)
-    ? "80+ years"
-    : years >= 1
-    ? `${years.toFixed(1)} years`
-    : `${monthsToGoal} months`;
-
-  return (
-    <div className="space-y-5">
-      <Slider
-        label="Extra monthly contribution"
-        val={extra}
-        sym="$"
-        min={0}
-        max={3000}
-        step={50}
-        onChange={setExtra}
-      />
-      <Slider
-        label="Your goal"
-        val={goal}
-        sym="$"
-        min={10000}
-        max={2000000}
-        step={5000}
-        onChange={setGoal}
-      />
-
-      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4">
-        <div className="text-[11px] font-semibold uppercase tracking-wider text-emerald-300">
-          You'd hit your goal in
-        </div>
-        <div className="mt-1 font-mono text-2xl font-bold text-white">
-          {displayTime}
-        </div>
-        {isFinite(monthsToGoal) && (
-          <p className="mt-2 text-xs leading-relaxed text-slate-300">
-            Saving{" "}
-            <span className="font-bold text-emerald-400">
-              ${(currentMonthlySavings + extra).toLocaleString()}
-            </span>{" "}
-            /month at {annualReturn}% return. Investment gains of{" "}
-            <span className="font-bold text-emerald-400">
-              ${Math.max(0, Math.round(gained)).toLocaleString()}
-            </span>{" "}
-            come from compounding.
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ============================================================
-   Fear & Greed Meter — glowing neon needle on a semicircle
-   ============================================================ */
-function FearGreedMeter({ marketData }: { marketData: any[] }) {
-  // Compute sentiment from average 24h change across tracked markets.
-  // Scale roughly: +3% avg → 90 (extreme greed), 0% → 50 (neutral), -3% → 10 (extreme fear)
-  const avgChange =
-    marketData.length > 0
-      ? marketData.reduce((s, m) => s + (m.change || 0), 0) / marketData.length
-      : 0;
-  const score = Math.max(0, Math.min(100, 50 + avgChange * 13));
-
-  const label =
-    score < 25
-      ? "Extreme Fear"
-      : score < 45
-      ? "Fear"
-      : score < 55
-      ? "Neutral"
-      : score < 75
-      ? "Greed"
-      : "Extreme Greed";
-
-  const color =
-    score < 25
-      ? "#f43f5e"
-      : score < 45
-      ? "#f97316"
-      : score < 55
-      ? "#eab308"
-      : score < 75
-      ? "#10b981"
-      : "#22c55e";
-
-  // Semicircle from 180° (left) to 0° (right), needle angle based on score
-  const angle = 180 - (score / 100) * 180;
-  const rad = (angle * Math.PI) / 180;
-  const cx = 120;
-  const cy = 100;
-  const r = 80;
-  const needleX = cx + Math.cos(rad) * r;
-  const needleY = cy - Math.sin(rad) * r;
-
-  // Build arc segments for the colored gauge
-  const segments = [
-    { from: 180, to: 144, color: "#f43f5e" },
-    { from: 144, to: 108, color: "#f97316" },
-    { from: 108, to: 72, color: "#eab308" },
-    { from: 72, to: 36, color: "#10b981" },
-    { from: 36, to: 0, color: "#22c55e" },
-  ];
-
-  const arcPath = (from: number, to: number, radius: number) => {
-    const f = (from * Math.PI) / 180;
-    const t = (to * Math.PI) / 180;
-    const x1 = cx + Math.cos(f) * radius;
-    const y1 = cy - Math.sin(f) * radius;
-    const x2 = cx + Math.cos(t) * radius;
-    const y2 = cy - Math.sin(t) * radius;
-    return `M ${x1} ${y1} A ${radius} ${radius} 0 0 1 ${x2} ${y2}`;
-  };
-
-  return (
-    <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-end sm:justify-between">
-      <div className="relative">
-        <svg viewBox="0 0 240 130" width="240" height="130">
-          <defs>
-            <filter id="glow">
-              <feGaussianBlur stdDeviation="2.5" result="coloredBlur" />
-              <feMerge>
-                <feMergeNode in="coloredBlur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-          </defs>
-
-          {/* Background arc */}
-          {segments.map((seg, i) => (
-            <path
-              key={i}
-              d={arcPath(seg.from, seg.to, r)}
-              stroke={seg.color}
-              strokeOpacity={0.25}
-              strokeWidth={14}
-              fill="none"
-              strokeLinecap="butt"
-            />
-          ))}
-
-          {/* Active segment up to the needle */}
-          {segments.map((seg, i) => {
-            if (seg.to > angle) return null;
-            const startAngle = seg.from < angle ? angle : seg.from;
-            return (
-              <path
-                key={`a-${i}`}
-                d={arcPath(startAngle, seg.to, r)}
-                stroke={seg.color}
-                strokeWidth={14}
-                fill="none"
-                strokeLinecap="butt"
-                filter="url(#glow)"
-                opacity={0.95}
-              />
-            );
-          })}
-
-          {/* Tick marks */}
-          {[0, 25, 50, 75, 100].map((val) => {
-            const a = ((180 - (val / 100) * 180) * Math.PI) / 180;
-            const x1 = cx + Math.cos(a) * (r - 12);
-            const y1 = cy - Math.sin(a) * (r - 12);
-            const x2 = cx + Math.cos(a) * (r - 20);
-            const y2 = cy - Math.sin(a) * (r - 20);
-            return (
-              <line
-                key={val}
-                x1={x1}
-                y1={y1}
-                x2={x2}
-                y2={y2}
-                stroke="#475569"
-                strokeWidth={1.5}
-              />
-            );
-          })}
-
-          {/* Needle with glow */}
-          <motion.line
-            x1={cx}
-            y1={cy}
-            x2={needleX}
-            y2={needleY}
-            stroke={color}
-            strokeWidth={3}
-            strokeLinecap="round"
-            filter="url(#glow)"
-            initial={{ pathLength: 0 }}
-            animate={{ pathLength: 1 }}
-            transition={{ duration: 0.9, ease: "easeOut" }}
-          />
+    <svg viewBox="0 0 128 128" className="w-full max-w-[140px] mx-auto">
+      {segments.map((seg, i) => {
+        const dash = (seg.pct / 100) * circ;
+        const gap = circ - dash;
+        const el = (
           <circle
+            key={i}
             cx={cx}
             cy={cy}
-            r={6}
-            fill={color}
-            filter="url(#glow)"
+            r={r}
+            fill="none"
+            stroke={seg.color}
+            strokeWidth={18}
+            strokeDasharray={`${dash} ${gap}`}
+            strokeDashoffset={-offset}
+            strokeLinecap="butt"
+            style={{ transform: "rotate(-90deg)", transformOrigin: "64px 64px" }}
           />
-          <circle cx={cx} cy={cy} r={3} fill="#020617" />
+        );
+        offset += dash;
+        return el;
+      })}
+      <circle cx={cx} cy={cy} r={42} fill="#0f172a" />
+    </svg>
+  );
+}
 
-          {/* Scale labels */}
-          <text x={cx - r} y={cy + 20} fontSize={8} fill="#64748b" textAnchor="middle">
-            Fear
-          </text>
-          <text x={cx} y={cy - r - 6} fontSize={8} fill="#64748b" textAnchor="middle">
-            Neutral
-          </text>
-          <text x={cx + r} y={cy + 20} fontSize={8} fill="#64748b" textAnchor="middle">
-            Greed
-          </text>
-        </svg>
-      </div>
+// ─── Sparkline ───────────────────────────────────────────────────────────────
+function Spark({ data, color = "#10b981" }: { data: number[]; color?: string }) {
+  if (data.length < 2) return null;
+  const w = 80, h = 28, pad = 2;
+  const max = Math.max(...data), min = Math.min(...data);
+  const range = max - min || 1;
+  const step = (w - pad * 2) / (data.length - 1);
+  const toY = (v: number) => h - pad - ((v - min) / range) * (h - pad * 2);
+  const d = data.map((v, i) => `${i === 0 ? "M" : "L"} ${pad + i * step} ${toY(v)}`).join(" ");
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h}>
+      <path d={d} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" />
+      <circle cx={pad + (data.length - 1) * step} cy={toY(data[data.length - 1])} r={2.5} fill={color} />
+    </svg>
+  );
+}
 
-      <div className="text-center sm:text-right">
-        <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-          Sentiment Score
-        </div>
-        <div
-          className="mt-1 font-mono text-4xl font-bold"
-          style={{ color, textShadow: `0 0 20px ${color}66` }}
-        >
-          {Math.round(score)}
-        </div>
-        <div
-          className="mt-1 text-xs font-bold uppercase tracking-wider"
-          style={{ color }}
-        >
-          {label}
-        </div>
-        <div className="mt-2 text-[11px] text-slate-400">
-          Avg 24h: {avgChange >= 0 ? "+" : ""}
-          {avgChange.toFixed(2)}%
-        </div>
+// ─── Market Pulse Gauge ───────────────────────────────────────────────────────
+function PulseGauge({ value }: { value: number }) {
+  const label = value < 30 ? "Fear" : value < 55 ? "Neutral" : value < 75 ? "Greed" : "Extreme Greed";
+  const color = value < 30 ? "#f43f5e" : value < 55 ? "#eab308" : value < 75 ? "#10b981" : "#06b6d4";
+  const angle = -90 + (value / 100) * 180;
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <svg viewBox="0 0 120 70" className="w-full max-w-[160px]">
+        <path d="M 10 65 A 50 50 0 0 1 110 65" fill="none" stroke="#1e293b" strokeWidth={10} strokeLinecap="round" />
+        <path d="M 10 65 A 50 50 0 0 1 110 65" fill="none" stroke={color} strokeWidth={10}
+          strokeLinecap="round" opacity={0.3} />
+        <motion.line x1="60" y1="65" x2="60" y2="22" stroke={color} strokeWidth={2.5} strokeLinecap="round"
+          animate={{ rotate: angle }} initial={{ rotate: -90 }}
+          transition={{ duration: 1, ease: "easeOut" }}
+          style={{ transformOrigin: "60px 65px" }} />
+        <circle cx={60} cy={65} r={4} fill={color} />
+      </svg>
+      <div className="text-center">
+        <div className="font-mono text-xl font-bold" style={{ color }}>{Math.round(value)}</div>
+        <div className="text-xs text-slate-400">{label}</div>
       </div>
     </div>
   );
 }
 
-/* ============================================================
-   Suspense wrapper — Next.js 16 requires useSearchParams() to be
-   rendered inside a Suspense boundary during prerender.
-   ============================================================ */
-export default function DashboardPage() {
+// ─── AI Insight Card ──────────────────────────────────────────────────────────
+interface Insight {
+  id: number;
+  type: "warning" | "success" | "info";
+  title: string;
+  message: string;
+  recommendation: string;
+  impact: string;
+  severity: "high" | "medium" | "low";
+}
+
+function InsightCard({ insight, idx }: { insight: Insight; idx: number }) {
+  const [open, setOpen] = useState(false);
+  const colors = {
+    warning: { border: "border-amber-500/30", bg: "bg-amber-500/8", icon: "text-amber-400", badge: "bg-amber-500/15 text-amber-300" },
+    success: { border: "border-emerald-500/30", bg: "bg-emerald-500/8", icon: "text-emerald-400", badge: "bg-emerald-500/15 text-emerald-300" },
+    info: { border: "border-blue-500/30", bg: "bg-blue-500/8", icon: "text-blue-400", badge: "bg-blue-500/15 text-blue-300" },
+  }[insight.type];
+
+  const Icon = insight.type === "warning" ? AlertTriangle : insight.type === "success" ? CheckCircle2 : Info;
+
   return (
-    <Suspense fallback={<div className="min-h-screen bg-slate-950" />}>
-      <MergedFinancialDashboard />
-    </Suspense>
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: idx * 0.07 }}
+      className={`rounded-xl border ${colors.border} overflow-hidden`}
+    >
+      <button
+        onClick={() => setOpen(!open)}
+        className={`w-full text-left p-4 flex items-start gap-3 hover:bg-white/[0.02] transition-colors`}
+      >
+        <span className={`mt-0.5 flex-shrink-0 ${colors.icon}`}>
+          <Icon className="w-4 h-4" />
+        </span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <p className="font-semibold text-white text-sm">{insight.title}</p>
+            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 ${colors.badge}`}>
+              {insight.severity}
+            </span>
+          </div>
+          <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">{insight.message}</p>
+        </div>
+        <ChevronDown className={`w-4 h-4 text-slate-500 flex-shrink-0 transition-transform mt-0.5 ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className={`px-4 pb-4 space-y-3 border-t ${colors.border}`}>
+              <div className="pt-3 rounded-lg bg-gradient-to-r from-emerald-500/10 to-blue-500/10 border border-white/5 p-3 mt-0">
+                <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                  <Brain className="w-3 h-3" /> AI Recommendation
+                </p>
+                <p className="text-xs text-slate-300 leading-relaxed">{insight.recommendation}</p>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-slate-400">
+                <DollarSign className="w-3 h-3 text-emerald-400" />
+                <span>{insight.impact}</span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }
 
+// ─── Main Dashboard ───────────────────────────────────────────────────────────
+export default function DashboardPage() {
+  const finance = useFinance();
+  const { firstName } = useUser();
+
+  // ── Local state for the add-money form ──
+  const [entryType, setEntryType] = useState<"income" | "expense">("expense");
+  const [entryName, setEntryName] = useState("");
+  const [entryAmount, setEntryAmount] = useState("");
+  const [entryCategory, setEntryCategory] = useState("Food");
+  const [adding, setAdding] = useState(false);
+
+  // ── Local state for settings ──
+  const [showSettings, setShowSettings] = useState(false);
+  const [incomeDraft, setIncomeDraft] = useState("");
+  const [returnDraft, setReturnDraft] = useState("");
+
+  // ── Monte Carlo ──
+  const [simRunning, setSimRunning] = useState(false);
+  const [simResult, setSimResult] = useState<null | {
+    successProbability: number;
+    medianEnding: number;
+    paths: { year: number; p10: number; p50: number; p90: number }[];
+  }>(null);
+  const [simYears, setSimYears] = useState(20);
+  const [simGoal, setSimGoal] = useState(1_000_000);
+
+  // ── Market pulse drift ──
+  const [pulse, setPulse] = useState(58);
+  useEffect(() => {
+    const id = setInterval(() => {
+      setPulse(p => Math.max(15, Math.min(92, p + (Math.random() - 0.48) * 3)));
+    }, 4000);
+    return () => clearInterval(id);
+  }, []);
+
+  // ── Derived ──
+  const {
+    netWorth, monthlyIncome, totalExpenses, netCashFlow,
+    savingsRate, spendingPercent, transactions, sectors, portfolioValue,
+    portfolioUnrealizedPnL, emergencyFundCurrent, emergencyFundTarget,
+    annualReturn, projectionYears, initialInvestment,
+    isLoaded,
+  } = finance;
+
+  const spendByCategory = useMemo(() => {
+    const map: Record<string, number> = {};
+    transactions.forEach(t => { map[t.category] = (map[t.category] || 0) + t.amount; });
+    return Object.entries(map)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+  }, [transactions]);
+
+  const categoryColors = ["#10b981", "#06b6d4", "#8b5cf6", "#f59e0b", "#f43f5e"];
+
+  const donutSegments = spendByCategory.map(([ label, amt ], i) => ({
+    label,
+    pct: totalExpenses > 0 ? (amt / totalExpenses) * 100 : 0,
+    color: categoryColors[i] || "#475569",
+  }));
+
+  const balanceTrend = useMemo(() => {
+    const base = initialInvestment || 0;
+    return Array.from({ length: 6 }, (_, i) => base + netCashFlow * i);
+  }, [initialInvestment, netCashFlow]);
+
+  // ── AI Insights derived from real data ──
+  const insights = useMemo((): Insight[] => {
+    const list: Insight[] = [];
+
+    if (savingsRate >= 20) {
+      list.push({
+        id: 1, type: "success", severity: "low",
+        title: "Savings Rate On Track",
+        message: `You're saving ${savingsRate.toFixed(0)}% of your income — above the 20% benchmark.`,
+        recommendation: "Funnel excess savings into a low-cost index fund (VTI or VXUS). At this rate, compound growth will accelerate significantly within 5 years.",
+        impact: `Maintaining this adds ~${fmtCompact(netCashFlow * 12)} to your portfolio annually`,
+      });
+    } else if (monthlyIncome > 0 && savingsRate < 10) {
+      list.push({
+        id: 1, type: "warning", severity: "high",
+        title: "Low Savings Rate",
+        message: `Only ${savingsRate.toFixed(0)}% of income is being saved. Target is 20%+.`,
+        recommendation: "Review your top 3 expense categories and reduce discretionary spend by 10%. Automate transfers to savings on payday.",
+        impact: `Reaching 20% would free ${fmtCompact((monthlyIncome * 0.2 - netCashFlow) || 0)}/month for investing`,
+      });
+    }
+
+    const emergencyPct = emergencyFundTarget > 0
+      ? (emergencyFundCurrent / emergencyFundTarget) * 100
+      : 100;
+    if (emergencyPct < 70) {
+      list.push({
+        id: 2, type: "warning", severity: "medium",
+        title: "Emergency Fund Gap",
+        message: `Your emergency fund covers ${emergencyPct.toFixed(0)}% of your 6-month target.`,
+        recommendation: "Prioritize topping up your emergency fund before investing more. Park it in a high-yield savings account earning 4-5% APY.",
+        impact: `${fmtCompact(emergencyFundTarget - emergencyFundCurrent)} needed to reach full protection`,
+      });
+    }
+
+    if (portfolioUnrealizedPnL > 0) {
+      list.push({
+        id: 3, type: "success", severity: "low",
+        title: "Portfolio Gaining",
+        message: `Your portfolio is up ${fmtCompact(portfolioUnrealizedPnL)} in unrealized gains.`,
+        recommendation: "Consider rebalancing if any sector has drifted more than 5% from your target allocation. Lock in gains by trimming high-risk positions.",
+        impact: `Current gain: ${portfolioValue > 0 ? ((portfolioUnrealizedPnL / (portfolioValue - portfolioUnrealizedPnL)) * 100).toFixed(1) : 0}% return on cost`,
+      });
+    } else if (portfolioUnrealizedPnL < -500) {
+      list.push({
+        id: 3, type: "info", severity: "medium",
+        title: "Tax-Loss Opportunity",
+        message: `You have ${fmtCompact(Math.abs(portfolioUnrealizedPnL))} in unrealized losses.`,
+        recommendation: "Consider tax-loss harvesting: sell losing positions to offset capital gains, then immediately buy a similar asset. Saves 15-20% in taxes.",
+        impact: `Potential tax saving: ${fmtCompact(Math.abs(portfolioUnrealizedPnL) * 0.2)} at 20% cap gains rate`,
+      });
+    }
+
+    const highRiskSectors = sectors.filter(s => s.risk > 65);
+    if (highRiskSectors.length >= 2) {
+      list.push({
+        id: 4, type: "warning", severity: "medium",
+        title: "Concentrated Risk",
+        message: `${highRiskSectors.length} sectors show high volatility (risk score > 65).`,
+        recommendation: "Shift 10-15% of high-risk sector exposure into bonds or a stable ETF like BND. Diversification reduces drawdown risk without sacrificing much upside.",
+        impact: "Reduces portfolio volatility by an estimated 8-12%",
+      });
+    }
+
+    if (monthlyIncome > 0) {
+      list.push({
+        id: 5, type: "info", severity: "low",
+        title: "Tax-Advantaged Account Check",
+        message: "Maximizing 401(k) and Roth IRA before taxable investing can save thousands yearly.",
+        recommendation: "Step 1: Get full employer match. Step 2: Max HSA ($4,300/yr triple tax-free). Step 3: Max Roth IRA ($7,000/yr). Step 4: Increase 401(k) to $23,500 limit.",
+        impact: "Could reduce your tax bill by $3,000–$8,000+ per year depending on income",
+      });
+    }
+
+    return list;
+  }, [savingsRate, monthlyIncome, emergencyFundCurrent, emergencyFundTarget,
+      portfolioUnrealizedPnL, portfolioValue, sectors, netCashFlow]);
+
+  // ── Add entry ──
+  const handleAddEntry = () => {
+    const amount = parseFloat(entryAmount);
+    if (!amount || amount <= 0 || !entryName.trim()) return;
+    setAdding(true);
+    setTimeout(() => {
+      if (entryType === "expense") {
+        finance.addTransaction({
+          name: entryName.trim(),
+          category: entryCategory,
+          amount,
+          date: new Date().toISOString().split("T")[0],
+          type: "expense",
+        });
+      } else {
+        finance.update({ monthlyIncome: finance.monthlyIncome + amount });
+      }
+      setEntryName("");
+      setEntryAmount("");
+      setAdding(false);
+    }, 300);
+  };
+
+  // ── Run Monte Carlo ──
+  const runSim = () => {
+    setSimRunning(true);
+    setTimeout(() => {
+      const r = monteCarloRetirement({
+        initial: portfolioValue || initialInvestment || 0,
+        monthlyContribution: Math.max(0, netCashFlow),
+        annualReturn: (annualReturn || 8) / 100,
+        annualVolatility: 0.15,
+        years: simYears,
+        goal: simGoal,
+        trials: 5000,
+      });
+      setSimResult(r);
+      setSimRunning(false);
+    }, 50);
+  };
+
+  // ── Sim chart SVG ──
+  const simChart = useMemo(() => {
+    if (!simResult) return null;
+    const paths = simResult.paths;
+    const w = 280, h = 100, pad = 10;
+    const all = paths.flatMap(p => [p.p10, p.p50, p.p90]);
+    const max = Math.max(...all, simGoal);
+    const step = (w - pad * 2) / Math.max(1, paths.length - 1);
+    const toY = (v: number) => h - pad - (v / max) * (h - pad * 2);
+    const line = (getter: (p: typeof paths[0]) => number) =>
+      paths.map((p, i) => `${i === 0 ? "M" : "L"} ${pad + i * step} ${toY(getter(p))}`).join(" ");
+    const goalY = toY(simGoal);
+    return { p10: line(p => p.p10), p50: line(p => p.p50), p90: line(p => p.p90), goalY, w, h, pad };
+  }, [simResult, simGoal]);
+
+  if (!isLoaded) {
+    return (
+      <div className="flex h-96 items-center justify-center">
+        <div className="flex items-center gap-3 text-slate-400">
+          <Loader2 className="w-5 h-5 animate-spin text-emerald-400" />
+          <span className="text-sm">Loading your dashboard…</span>
+        </div>
+      </div>
+    );
+  }
+
+  const greeting = firstName ? `Hey, ${firstName}` : "Dashboard";
+  const isEmptyState = monthlyIncome === 0 && transactions.length === 0;
+
+  return (
+    <div className="space-y-6 pb-20">
+
+      {/* ── Hero Header ── */}
+      <motion.div
+        initial={{ opacity: 0, y: -12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex items-start justify-between gap-4"
+      >
+        <div>
+          <p className="text-sm text-slate-400 mb-1">{greeting} · {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</p>
+          <div className="flex items-baseline gap-3">
+            <Counter
+              value={netWorth}
+              className="text-4xl font-black text-white tracking-tight"
+            />
+            {netCashFlow !== 0 && (
+              <span className={`text-sm font-semibold flex items-center gap-1 ${netCashFlow >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                {netCashFlow >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+                {fmtCompact(netCashFlow)}/mo
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-slate-500 mt-1">Total net worth</p>
+        </div>
+        <button
+          onClick={() => setShowSettings(!showSettings)}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-700 text-xs text-slate-400 hover:text-white hover:border-slate-600 transition-colors"
+        >
+          Settings
+        </button>
+      </motion.div>
+
+      {/* ── Settings panel ── */}
+      <AnimatePresence>
+        {showSettings && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Monthly Income</label>
+                <input
+                  type="number"
+                  placeholder="e.g. 6000"
+                  value={incomeDraft}
+                  onChange={e => setIncomeDraft(e.target.value)}
+                  onBlur={() => {
+                    const v = parseFloat(incomeDraft);
+                    if (!isNaN(v) && v >= 0) finance.update({ monthlyIncome: v });
+                  }}
+                  className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-emerald-500/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Expected Return %</label>
+                <input
+                  type="number"
+                  placeholder="e.g. 8"
+                  value={returnDraft}
+                  onChange={e => setReturnDraft(e.target.value)}
+                  onBlur={() => {
+                    const v = parseFloat(returnDraft);
+                    if (!isNaN(v) && v >= 0 && v <= 30) finance.update({ annualReturn: v });
+                  }}
+                  className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-emerald-500/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Starting Portfolio ($)</label>
+                <input
+                  type="number"
+                  placeholder="e.g. 50000"
+                  defaultValue={initialInvestment || ""}
+                  onBlur={e => {
+                    const v = parseFloat(e.target.value);
+                    if (!isNaN(v) && v >= 0) finance.update({ initialInvestment: v });
+                  }}
+                  className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-emerald-500/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Emergency Fund Target ($)</label>
+                <input
+                  type="number"
+                  placeholder="e.g. 18000"
+                  defaultValue={finance.emergencyFundTarget || ""}
+                  onBlur={e => {
+                    const v = parseFloat(e.target.value);
+                    if (!isNaN(v) && v >= 0) finance.update({ emergencyFundTarget: v });
+                  }}
+                  className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-emerald-500/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Empty state prompt ── */}
+      {isEmptyState && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 flex items-center gap-3"
+        >
+          <Sparkles className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-white">Start by adding your income and expenses</p>
+            <p className="text-xs text-slate-400 mt-0.5">Use the form below to log your first transaction — AI insights will activate automatically.</p>
+          </div>
+        </motion.div>
+      )}
+
+      {/* ── KPI Strip ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          {
+            label: "Monthly Income",
+            value: monthlyIncome,
+            sub: "gross take-home",
+            color: "text-emerald-400",
+            icon: TrendingUp,
+            spark: balanceTrend,
+            sparkColor: "#10b981",
+          },
+          {
+            label: "Monthly Spend",
+            value: totalExpenses,
+            sub: `${spendingPercent.toFixed(0)}% of income`,
+            color: totalExpenses > monthlyIncome * 0.8 ? "text-rose-400" : "text-slate-200",
+            icon: TrendingDown,
+            spark: [],
+            sparkColor: "#f43f5e",
+          },
+          {
+            label: "Net Cash Flow",
+            value: netCashFlow,
+            sub: `${savingsRate.toFixed(0)}% savings rate`,
+            color: netCashFlow >= 0 ? "text-emerald-400" : "text-rose-400",
+            icon: Activity,
+            spark: [],
+            sparkColor: netCashFlow >= 0 ? "#10b981" : "#f43f5e",
+          },
+          {
+            label: "Portfolio Value",
+            value: portfolioValue,
+            sub: portfolioUnrealizedPnL !== 0 ? `${portfolioUnrealizedPnL >= 0 ? "+" : ""}${fmtCompact(portfolioUnrealizedPnL)} unrealized` : "invested assets",
+            color: "text-blue-400",
+            icon: Target,
+            spark: [],
+            sparkColor: "#06b6d4",
+          },
+        ].map(({ label, value, sub, color, icon: Icon, spark, sparkColor }, i) => (
+          <motion.div
+            key={label}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.06 }}
+            className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 relative overflow-hidden"
+          >
+            <div className="flex items-start justify-between mb-2">
+              <p className="text-xs text-slate-500 font-medium">{label}</p>
+              {spark.length > 0 && <Spark data={spark} color={sparkColor} />}
+            </div>
+            <p className={`text-xl font-bold tracking-tight ${color}`}>{fmtCompact(value)}</p>
+            <p className="text-[10px] text-slate-500 mt-0.5">{sub}</p>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* ── Main 3-col layout ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        {/* LEFT: Cash Flow Manager */}
+        <div className="space-y-4">
+          <div className="rounded-xl border border-slate-800 bg-slate-900/50 overflow-hidden">
+            <div className="p-4 border-b border-slate-800">
+              <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+                <Plus className="w-4 h-4 text-emerald-400" />
+                Add Transaction
+              </h2>
+            </div>
+
+            <div className="p-4 space-y-3">
+              {/* Type toggle */}
+              <div className="flex rounded-lg bg-slate-950/60 p-1 gap-1">
+                {(["expense", "income"] as const).map(t => (
+                  <button
+                    key={t}
+                    onClick={() => setEntryType(t)}
+                    className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                      entryType === t
+                        ? t === "expense"
+                          ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                          : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                        : "text-slate-500 hover:text-slate-300"
+                    }`}
+                  >
+                    {t === "expense" ? "− Expense" : "+ Income"}
+                  </button>
+                ))}
+              </div>
+
+              {/* Name */}
+              <input
+                placeholder={entryType === "expense" ? "e.g. Grocery Store" : "e.g. Freelance payment"}
+                value={entryName}
+                onChange={e => setEntryName(e.target.value)}
+                className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/50 transition-colors"
+              />
+
+              {/* Amount */}
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-mono">$</span>
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="0"
+                  value={entryAmount}
+                  onChange={e => setEntryAmount(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && handleAddEntry()}
+                  className="w-full bg-slate-950/60 border border-slate-700 rounded-lg pl-7 pr-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/50 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+              </div>
+
+              {/* Category (only for expense) */}
+              {entryType === "expense" && (
+                <select
+                  value={entryCategory}
+                  onChange={e => setEntryCategory(e.target.value)}
+                  className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-emerald-500/50 transition-colors"
+                >
+                  {["Food", "Housing", "Transportation", "Entertainment", "Utilities", "Healthcare", "Shopping", "Other"].map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              )}
+
+              <button
+                onClick={handleAddEntry}
+                disabled={!entryAmount || !entryName.trim() || adding}
+                className="w-full py-2.5 rounded-lg bg-emerald-500 text-slate-950 text-sm font-bold transition-all hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                Add {entryType === "expense" ? "Expense" : "Income"}
+              </button>
+            </div>
+          </div>
+
+          {/* Recent transactions */}
+          {transactions.length > 0 && (
+            <div className="rounded-xl border border-slate-800 bg-slate-900/50 overflow-hidden">
+              <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-white">Recent Transactions</h2>
+                <span className="text-[10px] text-slate-500">{transactions.length} total</span>
+              </div>
+              <div className="divide-y divide-slate-800/60 max-h-[280px] overflow-y-auto">
+                {[...transactions].reverse().slice(0, 8).map(tx => (
+                  <div key={tx.id} className="flex items-center gap-3 px-4 py-3 hover:bg-white/[0.02] group transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-white truncate">{tx.name}</p>
+                      <p className="text-[10px] text-slate-500">{tx.category}</p>
+                    </div>
+                    <span className="text-sm font-mono text-rose-400 font-semibold">
+                      −${tx.amount.toLocaleString()}
+                    </span>
+                    <button
+                      onClick={() => finance.deleteTransaction(tx.id)}
+                      className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-rose-400 transition-all"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Emergency fund */}
+          <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-white">Emergency Fund</h2>
+              <span className="text-xs font-mono text-slate-400">
+                {emergencyFundTarget > 0 ? `${Math.min(100, (emergencyFundCurrent / emergencyFundTarget * 100)).toFixed(0)}%` : "—"}
+              </span>
+            </div>
+            <div className="h-2 rounded-full bg-slate-800 overflow-hidden mb-2">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${Math.min(100, emergencyFundTarget > 0 ? (emergencyFundCurrent / emergencyFundTarget * 100) : 0)}%` }}
+                transition={{ duration: 1, ease: "easeOut" }}
+                className={`h-full rounded-full ${emergencyFundCurrent >= emergencyFundTarget ? "bg-emerald-500" : "bg-amber-500"}`}
+              />
+            </div>
+            <div className="flex justify-between text-xs text-slate-500">
+              <span>{fmtCompact(emergencyFundCurrent)} saved</span>
+              <span>Goal: {fmtCompact(emergencyFundTarget)}</span>
+            </div>
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={() => finance.update({ emergencyFundCurrent: Math.max(0, emergencyFundCurrent - 500) })}
+                className="flex-1 py-1.5 text-xs border border-slate-700 rounded-lg text-slate-400 hover:text-white hover:border-slate-600 transition-colors"
+              >
+                − $500
+              </button>
+              <button
+                onClick={() => finance.update({ emergencyFundCurrent: emergencyFundCurrent + 500 })}
+                className="flex-1 py-1.5 text-xs border border-emerald-500/30 bg-emerald-500/10 rounded-lg text-emerald-300 hover:bg-emerald-500/20 transition-colors"
+              >
+                + $500
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* CENTER: AI Insights */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2">
+              <motion.div
+                animate={{ scale: [1, 1.1, 1] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              >
+                <Brain className="w-5 h-5 text-emerald-400" />
+              </motion.div>
+              <h2 className="text-sm font-semibold text-white">AI Financial Insights</h2>
+            </div>
+            <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-semibold">
+              {insights.length} active
+            </span>
+          </div>
+
+          {insights.length === 0 ? (
+            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-8 text-center">
+              <Sparkles className="w-8 h-8 text-slate-600 mx-auto mb-3" />
+              <p className="text-sm text-slate-400">Add your income and expenses to unlock AI insights tailored to your financial data.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {insights.map((insight, i) => (
+                <InsightCard key={insight.id} insight={insight} idx={i} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* RIGHT: Wealth Forecast + Market */}
+        <div className="space-y-4">
+
+          {/* Monte Carlo */}
+          <div className="rounded-xl border border-slate-800 bg-slate-900/50 overflow-hidden">
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+                <Zap className="w-4 h-4 text-blue-400" />
+                Wealth Forecast
+              </h2>
+              <span className="text-[10px] text-slate-500">Monte Carlo</span>
+            </div>
+            <div className="p-4 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Years</label>
+                  <input
+                    type="number"
+                    value={simYears}
+                    min={1} max={50}
+                    onChange={e => setSimYears(Number(e.target.value))}
+                    className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-blue-500/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Goal ($)</label>
+                  <input
+                    type="number"
+                    value={simGoal}
+                    step={50000}
+                    onChange={e => setSimGoal(Number(e.target.value))}
+                    className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-blue-500/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                </div>
+              </div>
+
+              <button
+                onClick={runSim}
+                disabled={simRunning}
+                className="w-full py-2.5 rounded-lg border border-blue-500/30 bg-blue-500/10 text-blue-300 text-sm font-semibold hover:bg-blue-500/20 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {simRunning
+                  ? <><Loader2 className="w-4 h-4 animate-spin" />Running 5,000 simulations…</>
+                  : <><Play className="w-4 h-4" />Run Simulation</>
+                }
+              </button>
+
+              {simResult && simChart && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
+                  <div className={`rounded-lg border p-3 text-center ${
+                    simResult.successProbability >= 0.75 ? "border-emerald-500/30 bg-emerald-500/8" :
+                    simResult.successProbability >= 0.5 ? "border-amber-500/30 bg-amber-500/8" :
+                    "border-rose-500/30 bg-rose-500/8"
+                  }`}>
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wider">Success Probability</p>
+                    <p className={`text-3xl font-black mt-1 ${
+                      simResult.successProbability >= 0.75 ? "text-emerald-400" :
+                      simResult.successProbability >= 0.5 ? "text-amber-400" : "text-rose-400"
+                    }`}>
+                      {(simResult.successProbability * 100).toFixed(0)}%
+                    </p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Median ending: {fmtCompact(simResult.medianEnding)}
+                    </p>
+                  </div>
+                  <svg viewBox={`0 0 ${simChart.w} ${simChart.h}`} className="w-full">
+                    <line x1={simChart.pad} y1={simChart.goalY} x2={simChart.w - simChart.pad} y2={simChart.goalY}
+                      stroke="#f59e0b" strokeDasharray="3 3" strokeWidth={1} />
+                    <path d={simChart.p10} fill="none" stroke="#f43f5e" strokeWidth={1.5} opacity={0.6} strokeDasharray="3 3" />
+                    <path d={simChart.p90} fill="none" stroke="#06b6d4" strokeWidth={1.5} opacity={0.6} strokeDasharray="3 3" />
+                    <path d={simChart.p50} fill="none" stroke="#10b981" strokeWidth={2.5} />
+                  </svg>
+                  <div className="flex justify-center gap-4 text-[10px] text-slate-500">
+                    <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-rose-400 inline-block" />Worst</span>
+                    <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-emerald-400 inline-block" />Median</span>
+                    <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-cyan-400 inline-block" />Best</span>
+                  </div>
+                </motion.div>
+              )}
+            </div>
+          </div>
+
+          {/* Market Pulse */}
+          <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+            <h2 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+              <Activity className="w-4 h-4 text-amber-400" />
+              Market Sentiment
+            </h2>
+            <PulseGauge value={pulse} />
+            <p className="text-center text-[10px] text-slate-500 mt-2">Fear & Greed Index · Live</p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Bottom: Spending + Asset Mix ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        {/* Spending Breakdown */}
+        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+          <h2 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+            <TrendingDown className="w-4 h-4 text-rose-400" />
+            Spending Breakdown
+          </h2>
+          {spendByCategory.length === 0 ? (
+            <div className="py-8 text-center text-sm text-slate-500">No transactions yet</div>
+          ) : (
+            <div className="flex items-center gap-6">
+              <div className="flex-shrink-0 w-36">
+                <DonutChart segments={donutSegments} />
+                <p className="text-center text-xs text-slate-500 mt-1 font-mono">{fmtCompact(totalExpenses)}</p>
+              </div>
+              <div className="flex-1 space-y-2">
+                {spendByCategory.map(([cat, amt], i) => (
+                  <div key={cat} className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: categoryColors[i] }} />
+                    <span className="text-xs text-slate-400 flex-1 truncate">{cat}</span>
+                    <span className="text-xs font-mono font-semibold text-slate-200">{fmtCompact(amt)}</span>
+                    <span className="text-[10px] text-slate-500 w-10 text-right">
+                      {totalExpenses > 0 ? ((amt / totalExpenses) * 100).toFixed(0) : 0}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Asset Allocation */}
+        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+          <h2 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+            <Target className="w-4 h-4 text-blue-400" />
+            Sector Allocation
+          </h2>
+          <div className="space-y-2">
+            {sectors.slice(0, 6).map(s => {
+              const riskColor = s.risk < 35 ? "#10b981" : s.risk < 60 ? "#f59e0b" : "#f43f5e";
+              return (
+                <div key={s.name} className="flex items-center gap-3">
+                  <span className="text-xs text-slate-400 w-20 truncate">{s.name}</span>
+                  <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${s.weight}%` }}
+                      transition={{ duration: 0.8, ease: "easeOut" }}
+                      className="h-full rounded-full"
+                      style={{ background: riskColor }}
+                    />
+                  </div>
+                  <span className="text-[10px] font-mono text-slate-400 w-8 text-right">{s.weight}%</span>
+                  <span className={`text-[10px] font-mono w-12 text-right ${s.change >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                    {s.change >= 0 ? "+" : ""}{s.change.toFixed(1)}%
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-3 pt-3 border-t border-slate-800 flex items-center gap-4 text-[10px] text-slate-500">
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />Low risk</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />Medium</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />High</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
