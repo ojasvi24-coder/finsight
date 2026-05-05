@@ -27,29 +27,23 @@ function randn(rand: () => number) {
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }
 
-// ─── Monte Carlo Preview Chart ────────────────────────────────────────────────
+// ─── Monte Carlo Preview Chart — Bloomberg-grade ─────────────────────────────
 function MonteCarloPreviewer({ startValue, monthlyAdd }: { startValue: number; monthlyAdd: number }) {
   const prefersReduced = useReducedMotion();
-  const [drawn, setDrawn] = useState(false);
+  // Single boolean: are we mounted client-side yet?
+  const [ready, setReady] = useState(false);
+  useEffect(() => { setReady(true); }, []);
 
-  useEffect(() => {
-    const t = setTimeout(() => setDrawn(true), 200);
-    return () => clearTimeout(t);
-  }, []);
-
-  const base = Math.max(startValue, 5000);
-  const mc   = Math.max(monthlyAdd, 0);
+  const base  = Math.max(startValue, 5000);
+  const mc    = Math.max(monthlyAdd, 0);
   const YEARS = 25;
   const TRIALS = 600;
-  const MU  = 0.08 / 12;
-  const SIG = 0.15 / Math.sqrt(12);
+  const MU    = 0.08 / 12;
+  const SIG   = 0.15 / Math.sqrt(12);
 
-  // Run simulation with seeded PRNG so it's stable across renders
   const { p10, p25, p50, p75, p90 } = useMemo(() => {
     const rand = mulberry32(42);
-    const endings: number[] = [];
     const allPaths: number[][] = [];
-
     for (let t = 0; t < TRIALS; t++) {
       let v = base;
       const path: number[] = [v];
@@ -58,186 +52,311 @@ function MonteCarloPreviewer({ startValue, monthlyAdd }: { startValue: number; m
         if (m % 12 === 11) path.push(v);
       }
       allPaths.push(path);
-      endings.push(v);
     }
-
-    // Build year-by-year percentiles
-    const years = YEARS + 1;
     const pct = (arr: number[], p: number) => {
       const s = [...arr].sort((a, b) => a - b);
       return s[Math.floor(s.length * p)] ?? 0;
     };
-
-    const p10: number[] = [], p25: number[] = [], p50: number[] = [], p75: number[] = [], p90: number[] = [];
-    for (let y = 0; y < years; y++) {
+    const p10: number[] = [], p25: number[] = [], p50: number[] = [],
+          p75: number[] = [], p90: number[] = [];
+    for (let y = 0; y <= YEARS; y++) {
       const col = allPaths.map(path => path[y] ?? base);
-      p10.push(pct(col, 0.10));
-      p25.push(pct(col, 0.25));
-      p50.push(pct(col, 0.50));
-      p75.push(pct(col, 0.75));
+      p10.push(pct(col, 0.10)); p25.push(pct(col, 0.25));
+      p50.push(pct(col, 0.50)); p75.push(pct(col, 0.75));
       p90.push(pct(col, 0.90));
     }
-
     return { p10, p25, p50, p75, p90 };
   }, [base, mc]);
 
-  // SVG helpers
-  const W = 560, H = 180, PX = 16, PY = 14;
-  const maxV = Math.max(...p90) * 1.05;
-  const toX  = (i: number) => PX + (i / YEARS) * (W - PX * 2);
-  const toY  = (v: number) => H - PY - (v / maxV) * (H - PY * 2);
+  // Layout
+  const W = 560, H = 200, PL = 46, PR = 58, PT = 16, PB = 28;
+  const cW = W - PL - PR, cH = H - PT - PB;
+  const maxV = Math.max(...p90) * 1.06;
+  const minV = base * 0.92;
+  const toX = (i: number) => PL + (i / YEARS) * cW;
+  const toY = (v: number) => PT + cH - ((v - minV) / (maxV - minV)) * cH;
 
-  const polyline = (pts: number[]) =>
-    pts.map((v, i) => `${i === 0 ? "M" : "L"} ${toX(i)} ${toY(v)}`).join(" ");
+  const line = (pts: number[]) =>
+    pts.map((v, i) => `${i === 0 ? "M" : "L"} ${toX(i).toFixed(2)} ${toY(v).toFixed(2)}`).join(" ");
+
+  // Gradient area fill under the median line — the closed path
+  const medianArea = line(p50)
+    + ` L ${toX(YEARS).toFixed(2)} ${(PT + cH).toFixed(2)}`
+    + ` L ${toX(0).toFixed(2)} ${(PT + cH).toFixed(2)} Z`;
 
   const band = (upper: number[], lower: number[]) =>
-    upper.map((v, i) => `${i === 0 ? "M" : "L"} ${toX(i)} ${toY(v)}`).join(" ") + " " +
-    lower.slice().reverse().map((v, i) => `L ${toX(lower.length - 1 - i)} ${toY(v)}`).join(" ") + " Z";
+    upper.map((v, i) => `${i === 0 ? "M" : "L"} ${toX(i).toFixed(2)} ${toY(v).toFixed(2)}`).join(" ")
+    + " "
+    + lower.slice().reverse().map((v, i) =>
+        `L ${toX(lower.length - 1 - i).toFixed(2)} ${toY(v).toFixed(2)}`
+      ).join(" ")
+    + " Z";
 
-  const fmtY = (v: number) => v >= 1_000_000 ? `$${(v / 1_000_000).toFixed(1)}M`
-    : v >= 1_000 ? `$${(v / 1_000).toFixed(0)}k` : `$${v}`;
+  const fmtV = (v: number) =>
+    v >= 1_000_000 ? `$${(v / 1_000_000).toFixed(2)}M`
+    : v >= 1_000   ? `$${(v / 1_000).toFixed(0)}k`
+    :                `$${Math.round(v)}`;
 
-  const medianEnd = p50[p50.length - 1];
+  const medianEnd  = p50[YEARS]!;
+  const bestEnd    = p90[YEARS]!;
+  const worstEnd   = p10[YEARS]!;
+  const gain       = medianEnd - base;
+  const gainPct    = ((gain / base) * 100).toFixed(0);
+  const isUp       = gain >= 0;
+
+  // Y-axis ticks — 4 evenly spaced
+  const yTicks = [0, 0.33, 0.67, 1].map(t => minV + (maxV - minV) * t);
 
   return (
-    <div className="relative w-full overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-900/50 backdrop-blur-md">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-800/80 px-5 py-3">
+    // Glassmorphism container
+    <div
+      className="relative w-full overflow-hidden rounded-2xl"
+      style={{
+        background: "rgba(15, 23, 42, 0.55)",
+        backdropFilter: "blur(20px) saturate(160%)",
+        WebkitBackdropFilter: "blur(20px) saturate(160%)",
+        border: "1px solid rgba(148, 163, 184, 0.1)",
+        boxShadow: "0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05)",
+      }}
+    >
+      {/* Subtle inner highlight at top */}
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-500/30 to-transparent" />
+
+      {/* ── Title bar ── */}
+      <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/[0.06]">
         <div className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-rose-400/60" />
-          <span className="h-2.5 w-2.5 rounded-full bg-amber-400/60" />
-          <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/60" />
-          <span className="ml-3 text-[11px] font-bold tracking-widest text-slate-500 uppercase">
-            Wealth Forecast · Monte Carlo
+          <span className="h-2.5 w-2.5 rounded-full bg-rose-400/50" />
+          <span className="h-2.5 w-2.5 rounded-full bg-amber-400/50" />
+          <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/50" />
+          <span className="ml-3 text-[10px] font-bold tracking-[0.15em] text-slate-500 uppercase">
+            Wealth Forecast &nbsp;·&nbsp; Monte Carlo
           </span>
         </div>
-        <div className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-400">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-          {TRIALS.toLocaleString()} paths · {YEARS}yr
+        <div className="flex items-center gap-1.5">
+          <span className="relative flex h-1.5 w-1.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+          </span>
+          <span className="text-[10px] font-semibold text-emerald-400/80">
+            {TRIALS} paths &nbsp;·&nbsp; {YEARS}yr horizon
+          </span>
         </div>
       </div>
 
-      {/* Value strip */}
-      <div className="flex items-end justify-between px-5 pt-4 pb-2">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Starting value</p>
-          <p className="font-mono text-2xl font-black text-white mt-0.5">
-            {fmtY(base)}
-            <span className="ml-2 text-sm font-semibold text-slate-500">today</span>
+      {/* ── Stat strip ── */}
+      <div className="grid grid-cols-3 divide-x divide-white/[0.06] border-b border-white/[0.06]">
+        {/* Starting value */}
+        <div className="px-5 py-3.5">
+          <p className="text-[9px] font-semibold uppercase tracking-widest text-slate-500 mb-1">
+            Starting value
           </p>
+          <p className="font-mono text-base font-bold text-slate-300">{fmtV(base)}</p>
+          <p className="text-[9px] text-slate-600 mt-0.5">today</p>
         </div>
-        <div className="text-right hidden sm:block">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Median in {YEARS} years</p>
-          <p className="font-mono text-2xl font-black text-emerald-400 mt-0.5">{fmtY(medianEnd)}</p>
+        {/* Median projection — hero stat with glow */}
+        <div className="px-5 py-3.5">
+          <p className="text-[9px] font-semibold uppercase tracking-widest text-slate-500 mb-1">
+            Median · {YEARS}yr
+          </p>
+          <motion.p
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.8, duration: 0.5 }}
+            className="font-mono text-xl font-black"
+            style={{
+              color: "#34d399",
+              textShadow: "0 0 12px rgba(52, 211, 153, 0.7), 0 0 28px rgba(52, 211, 153, 0.35)",
+            }}
+          >
+            {fmtV(medianEnd)}
+          </motion.p>
+          <div className={`flex items-center gap-1 mt-0.5 text-[9px] font-semibold ${isUp ? "text-emerald-400" : "text-rose-400"}`}>
+            {isUp ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />}
+            {isUp ? "+" : ""}{gainPct}% total return
+          </div>
+        </div>
+        {/* Range */}
+        <div className="px-5 py-3.5">
+          <p className="text-[9px] font-semibold uppercase tracking-widest text-slate-500 mb-1">
+            Range · P10 – P90
+          </p>
+          <p className="font-mono text-[11px] text-emerald-400/70 font-semibold">{fmtV(bestEnd)}</p>
+          <div className="my-0.5 h-px w-8 bg-slate-700" />
+          <p className="font-mono text-[11px] text-rose-400/70 font-semibold">{fmtV(worstEnd)}</p>
         </div>
       </div>
 
-      {/* SVG chart */}
-      <div className="px-1 pb-1">
-        <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ overflow: "visible" }}>
+      {/* ── SVG chart ── */}
+      <div className="px-0 pt-2 pb-0 relative">
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          className="w-full"
+          style={{ overflow: "visible" }}
+        >
           <defs>
-            <linearGradient id="bandFill1" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#10b981" stopOpacity="0.12" />
+            {/* Gradient area fill under median — lush emerald fade */}
+            <linearGradient id="mc-median-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%"   stopColor="#10b981" stopOpacity="0.22" />
+              <stop offset="55%"  stopColor="#10b981" stopOpacity="0.08" />
+              <stop offset="100%" stopColor="#10b981" stopOpacity="0"    />
+            </linearGradient>
+            {/* Outer band fill */}
+            <linearGradient id="mc-outer-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%"   stopColor="#10b981" stopOpacity="0.05" />
+              <stop offset="100%" stopColor="#10b981" stopOpacity="0"    />
+            </linearGradient>
+            {/* Inner band fill */}
+            <linearGradient id="mc-inner-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%"   stopColor="#10b981" stopOpacity="0.10" />
               <stop offset="100%" stopColor="#10b981" stopOpacity="0.02" />
             </linearGradient>
-            <linearGradient id="bandFill2" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#10b981" stopOpacity="0.06" />
-              <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
-            </linearGradient>
-            <filter id="glow">
-              <feGaussianBlur stdDeviation="2" result="blur" />
-              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+            {/* Median line glow filter */}
+            <filter id="mc-line-glow" x="-10%" y="-50%" width="120%" height="200%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
+              <feColorMatrix in="blur" type="matrix"
+                values="0 0 0 0 0.06  0 0 0 0 0.73  0 0 0 0 0.51  0 0 0 0.9 0" result="glow" />
+              <feMerge>
+                <feMergeNode in="glow" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
             </filter>
+            {/* Clipping rect so lines don't spill past chart area */}
+            <clipPath id="mc-clip">
+              <rect x={PL} y={PT} width={cW} height={cH + 1} />
+            </clipPath>
           </defs>
 
-          {/* Year grid lines */}
-          {[5, 10, 15, 20, 25].map(yr => (
-            <g key={yr}>
-              <line x1={toX(yr)} y1={PY} x2={toX(yr)} y2={H - PY}
-                stroke="#1e293b" strokeWidth={1} strokeDasharray="3 3" />
-              <text x={toX(yr)} y={H - 2} textAnchor="middle"
-                fill="#475569" fontSize={9} fontFamily="monospace">{yr}yr</text>
-            </g>
-          ))}
-
-          {/* Value labels */}
-          {[0.25, 0.5, 0.75, 1].map(pct => {
-            const v = maxV * pct;
+          {/* ── Y-axis grid & labels ── */}
+          {yTicks.map((v, i) => {
             const y = toY(v);
             return (
-              <text key={pct} x={PX - 4} y={y + 3} textAnchor="end"
-                fill="#334155" fontSize={8} fontFamily="monospace">{fmtY(v)}</text>
+              <g key={i}>
+                <line x1={PL} y1={y} x2={PL + cW} y2={y}
+                  stroke="rgba(148,163,184,0.07)" strokeWidth={1} />
+                <text x={PL - 6} y={y + 3.5} textAnchor="end"
+                  fill="#334155" fontSize={8} fontFamily="'SF Mono', monospace"
+                  letterSpacing="0">
+                  {fmtV(v)}
+                </text>
+              </g>
             );
           })}
 
-          {/* Outer band P10–P90 */}
-          {drawn && (
-            <motion.path d={band(p90, p10)} fill="url(#bandFill2)"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8 }} />
-          )}
+          {/* ── X-axis year labels ── */}
+          {[5, 10, 15, 20, 25].map(yr => (
+            <g key={yr}>
+              <line x1={toX(yr)} y1={PT} x2={toX(yr)} y2={PT + cH}
+                stroke="rgba(148,163,184,0.06)" strokeWidth={1} strokeDasharray="2 4" />
+              <text x={toX(yr)} y={H - 6} textAnchor="middle"
+                fill="#334155" fontSize={8} fontFamily="'SF Mono', monospace">
+                {yr}yr
+              </text>
+            </g>
+          ))}
 
-          {/* Inner band P25–P75 */}
-          {drawn && (
-            <motion.path d={band(p75, p25)} fill="url(#bandFill1)"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8, delay: 0.1 }} />
-          )}
+          {/* ── Chart content (clipped) ── */}
+          <g clipPath="url(#mc-clip)">
 
-          {/* P10 / P90 edges */}
-          {drawn && (
-            <>
-              <motion.path d={polyline(p90)} fill="none" stroke="#10b981" strokeWidth={1}
-                strokeDasharray="4 3" opacity={0.25}
+            {/* Outer band P10–P90 */}
+            {ready && (
+              <motion.path d={band(p90, p10)} fill="url(#mc-outer-fill)"
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                transition={{ duration: 0.6 }} />
+            )}
+
+            {/* Inner band P25–P75 */}
+            {ready && (
+              <motion.path d={band(p75, p25)} fill="url(#mc-inner-fill)"
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                transition={{ duration: 0.6, delay: 0.1 }} />
+            )}
+
+            {/* Gradient area fill under median */}
+            {ready && (
+              <motion.path d={medianArea} fill="url(#mc-median-fill)"
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                transition={{ duration: 0.7, delay: 0.25 }} />
+            )}
+
+            {/* P90 boundary — optimistic dashed */}
+            {ready && (
+              <motion.path d={line(p90)} fill="none"
+                stroke="#10b981" strokeWidth={1} strokeDasharray="3 4" opacity={0.22}
                 initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
-                transition={{ duration: prefersReduced ? 0 : 1.4, ease: "easeOut", delay: 0.2 }} />
-              <motion.path d={polyline(p10)} fill="none" stroke="#f43f5e" strokeWidth={1}
-                strokeDasharray="4 3" opacity={0.2}
+                transition={{ duration: prefersReduced ? 0 : 1.2, ease: "easeOut" }} />
+            )}
+
+            {/* P10 boundary — pessimistic dashed */}
+            {ready && (
+              <motion.path d={line(p10)} fill="none"
+                stroke="#f43f5e" strokeWidth={1} strokeDasharray="3 4" opacity={0.18}
                 initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
-                transition={{ duration: prefersReduced ? 0 : 1.4, ease: "easeOut", delay: 0.2 }} />
-            </>
-          )}
+                transition={{ duration: prefersReduced ? 0 : 1.2, ease: "easeOut", delay: 0.05 }} />
+            )}
 
-          {/* Median line */}
-          {drawn && (
-            <motion.path d={polyline(p50)} fill="none" stroke="#10b981" strokeWidth={2.5}
-              strokeLinecap="round" filter="url(#glow)"
-              initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
-              transition={{ duration: prefersReduced ? 0 : 1.6, ease: "easeOut", delay: 0.3 }} />
-          )}
+            {/* Median line — hero with glow */}
+            {ready && (
+              <motion.path d={line(p50)} fill="none"
+                stroke="#34d399" strokeWidth={2.5} strokeLinecap="round"
+                filter="url(#mc-line-glow)"
+                initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
+                transition={{ duration: prefersReduced ? 0 : 1.5, ease: "easeOut", delay: 0.1 }} />
+            )}
+          </g>
 
-          {/* Start dot */}
-          <circle cx={toX(0)} cy={toY(base)} r={5} fill="#10b981" stroke="#0f172a" strokeWidth={2} />
-          <circle cx={toX(0)} cy={toY(base)} r={10} fill="#10b981" opacity={0.15}>
-            <animate attributeName="r" values="5;14;5" dur="2.5s" repeatCount="indefinite" />
-            <animate attributeName="opacity" values="0.2;0;0.2" dur="2.5s" repeatCount="indefinite" />
+          {/* ── Origin pulse dot ── */}
+          <circle cx={toX(0)} cy={toY(base)} r={4.5}
+            fill="#34d399" stroke="rgba(15,23,42,0.9)" strokeWidth={2} />
+          <circle cx={toX(0)} cy={toY(base)} r={4.5} fill="#34d399" opacity={0.2}>
+            <animate attributeName="r" values="4;13;4" dur="2.8s" repeatCount="indefinite" />
+            <animate attributeName="opacity" values="0.25;0;0.25" dur="2.8s" repeatCount="indefinite" />
           </circle>
 
-          {/* Endpoint labels */}
-          {drawn && (
-            <>
-              <text x={toX(YEARS) + 6} y={toY(p90[YEARS]) + 4} fill="#10b981"
-                fontSize={8} fontFamily="monospace" opacity={0.5}>best</text>
-              <text x={toX(YEARS) + 6} y={toY(p50[YEARS]) + 4} fill="#10b981"
-                fontSize={9} fontFamily="monospace" fontWeight="bold">median</text>
-              <text x={toX(YEARS) + 6} y={toY(p10[YEARS]) + 4} fill="#f43f5e"
-                fontSize={8} fontFamily="monospace" opacity={0.5}>worst</text>
-            </>
+          {/* ── End-point callout labels ── */}
+          {ready && (
+            <motion.g initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+              transition={{ duration: 0.5, delay: 1.4 }}>
+              <text x={toX(YEARS) + 7} y={toY(bestEnd) + 4}
+                fill="#10b981" fontSize={8} fontFamily="'SF Mono', monospace" opacity={0.5}>
+                best
+              </text>
+              <text x={toX(YEARS) + 7} y={toY(medianEnd) + 4}
+                fill="#34d399" fontSize={9} fontFamily="'SF Mono', monospace" fontWeight="bold"
+                style={{ filter: "drop-shadow(0 0 4px rgba(52,211,153,0.6))" }}>
+                median
+              </text>
+              <text x={toX(YEARS) + 7} y={toY(worstEnd) + 4}
+                fill="#f87171" fontSize={8} fontFamily="'SF Mono', monospace" opacity={0.45}>
+                worst
+              </text>
+            </motion.g>
           )}
         </svg>
       </div>
 
-      {/* Legend */}
-      <div className="flex items-center gap-5 border-t border-slate-800/60 px-5 py-3 text-[10px] text-slate-500">
+      {/* ── Legend footer ── */}
+      <div
+        className="flex flex-wrap items-center gap-x-5 gap-y-1.5 px-5 py-3 text-[9px] text-slate-500"
+        style={{ borderTop: "1px solid rgba(148,163,184,0.07)" }}
+      >
         <span className="flex items-center gap-1.5">
-          <span className="block h-0.5 w-4 rounded bg-emerald-500" />Median path
+          <span className="block h-px w-5" style={{ background: "#34d399", boxShadow: "0 0 4px #34d399" }} />
+          Median path
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="block h-2 w-4 rounded bg-emerald-500/20" />Middle 50%
+          <span className="block h-2.5 w-5 rounded-sm bg-emerald-500/15" />
+          Middle 50%
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="block h-2 w-4 rounded bg-emerald-500/8" />Full range
+          <span className="block h-2.5 w-5 rounded-sm bg-emerald-500/6" />
+          P10 – P90 range
         </span>
-        <span className="ml-auto">8% avg return · 15% vol · @8% p.a.</span>
+        <span className="ml-auto opacity-60">8% avg return &nbsp;·&nbsp; 15% volatility &nbsp;·&nbsp; monthly contributions</span>
       </div>
+
+      {/* Subtle bottom inner glow */}
+      <div className="absolute inset-x-0 bottom-0 h-20 pointer-events-none"
+        style={{ background: "radial-gradient(ellipse at 50% 100%, rgba(16,185,129,0.06), transparent 70%)" }} />
     </div>
   );
 }
