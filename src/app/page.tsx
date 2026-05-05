@@ -478,7 +478,7 @@ export default function HomePage() {
           className="mt-16 grid gap-6 rounded-2xl border border-slate-800 bg-slate-900/40 p-8 sm:grid-cols-3">
           {[
             { stat: "3,000+", label: "Monte Carlo trials per forecast run" },
-            { stat: "5",      label: "AI insights generated from your real data" },
+            { stat: "Live", label: "AI insights generated from your real data" },
             { stat: "0",      label: "Servers that ever see your financial data" },
           ].map(s => (
             <div key={s.stat}>

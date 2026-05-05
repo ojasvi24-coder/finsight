@@ -43,7 +43,7 @@ export interface FinanceState {
   encryptionEnabled: boolean;
 }
 
-// Clean defaults — no pre-filled mock data to confuse users
+// Clean slate — no pre-filled mock data
 const DEFAULT_STATE: FinanceState = {
   monthlyIncome: 0,
   initialInvestment: 0,
@@ -51,14 +51,14 @@ const DEFAULT_STATE: FinanceState = {
   projectionYears: 30,
   transactions: [],
   sectors: [
-    { name: "Tech", weight: 28, risk: 72, change: -1.2 },
-    { name: "Finance", weight: 18, risk: 45, change: 0.3 },
-    { name: "Healthcare", weight: 14, risk: 32, change: 0.8 },
-    { name: "Energy", weight: 10, risk: 68, change: -2.1 },
-    { name: "Consumer", weight: 12, risk: 28, change: 0.5 },
-    { name: "Industrials", weight: 8, risk: 38, change: 0.1 },
-    { name: "Real Estate", weight: 6, risk: 52, change: -0.4 },
-    { name: "Bonds", weight: 4, risk: 12, change: 0.2 },
+    { name: "Tech",        weight: 28, risk: 72, change: -1.2 },
+    { name: "Finance",     weight: 18, risk: 45, change:  0.3 },
+    { name: "Healthcare",  weight: 14, risk: 32, change:  0.8 },
+    { name: "Energy",      weight: 10, risk: 68, change: -2.1 },
+    { name: "Consumer",    weight: 12, risk: 28, change:  0.5 },
+    { name: "Industrials", weight:  8, risk: 38, change:  0.1 },
+    { name: "Real Estate", weight:  6, risk: 52, change: -0.4 },
+    { name: "Bonds",       weight:  4, risk: 12, change:  0.2 },
   ],
   positions: [],
   emergencyFundTarget: 0,
@@ -110,6 +110,13 @@ export function useFinance() {
     });
   }, []);
 
+  // Clears all financial data — called on logout
+  const reset = useCallback(() => {
+    window.localStorage.removeItem(STORAGE_KEY);
+    window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
+    setState(DEFAULT_STATE);
+  }, []);
+
   const addTransaction = useCallback((tx: Omit<Transaction, "id">) => {
     setState(prev => {
       const next = {
@@ -141,14 +148,14 @@ export function useFinance() {
   }, []);
 
   // Derived values
-  const totalExpenses = state.transactions.reduce((s, t) => s + t.amount, 0);
-  const netCashFlow = state.monthlyIncome - totalExpenses;
-  const currentBalance = state.initialInvestment + netCashFlow;
-  const savingsRate = state.monthlyIncome === 0 ? 0 : (netCashFlow / state.monthlyIncome) * 100;
-  const spendingPercent = state.monthlyIncome === 0 ? 0 : (totalExpenses / state.monthlyIncome) * 100;
+  const totalExpenses    = state.transactions.reduce((s, t) => s + t.amount, 0);
+  const netCashFlow      = state.monthlyIncome - totalExpenses;
+  const currentBalance   = state.initialInvestment + netCashFlow;
+  const savingsRate      = state.monthlyIncome === 0 ? 0 : (netCashFlow / state.monthlyIncome) * 100;
+  const spendingPercent  = state.monthlyIncome === 0 ? 0 : (totalExpenses / state.monthlyIncome) * 100;
 
-  const portfolioValue = state.positions.reduce((s, p) => s + p.shares * p.currentPrice, 0);
-  const portfolioCostBasis = state.positions.reduce((s, p) => s + p.shares * p.costBasis, 0);
+  const portfolioValue        = state.positions.reduce((s, p) => s + p.shares * p.currentPrice, 0);
+  const portfolioCostBasis    = state.positions.reduce((s, p) => s + p.shares * p.costBasis, 0);
   const portfolioUnrealizedPnL = portfolioValue - portfolioCostBasis;
 
   const netWorth = currentBalance + portfolioValue + state.emergencyFundCurrent;
@@ -157,6 +164,7 @@ export function useFinance() {
     ...state,
     isLoaded,
     update,
+    reset,
     addTransaction,
     deleteTransaction,
     updateSector,

@@ -2,19 +2,31 @@
 
 import { useState, useEffect, useCallback } from "react";
 
-/**
- * Lightweight user profile hook — persists to localStorage.
- * Swap this with real auth later by replacing the read/write calls.
- *
- * Usage:
- *   const { name, firstName, initials, isLoaded, hasProfile, updateUser } = useUser();
- */
-
 const STORAGE_KEY = "finsight.user.v1";
+const UPDATE_EVENT = "finsight-user-update";
 
 interface StoredUser {
   name: string;
   email?: string;
+}
+
+function read(): StoredUser {
+  if (typeof window === "undefined") return { name: "" };
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { name: "" };
+    const parsed = JSON.parse(raw) as StoredUser;
+    if (parsed && typeof parsed.name === "string") return parsed;
+  } catch { /* ignore */ }
+  return { name: "" };
+}
+
+function write(user: StoredUser) {
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+    // Broadcast to every useUser instance on this page
+    window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
+  } catch { /* ignore */ }
 }
 
 export function useUser() {
@@ -22,42 +34,33 @@ export function useUser() {
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
-    try {
-      if (typeof window !== "undefined") {
-        const raw = window.localStorage.getItem(STORAGE_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw) as StoredUser;
-          if (parsed && typeof parsed.name === "string") setUser(parsed);
-        }
-      }
-    } catch {
-      /* ignore */
-    }
+    // Read immediately on mount
+    setUser(read());
     setIsLoaded(true);
+
+    // Stay in sync with any other component that calls updateUser
+    const sync = () => setUser(read());
+    window.addEventListener(UPDATE_EVENT, sync);
+    // Cross-tab sync
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener(UPDATE_EVENT, sync);
+      window.removeEventListener("storage", sync);
+    };
   }, []);
 
   const updateUser = useCallback((next: Partial<StoredUser>) => {
-    setUser((prev) => {
+    setUser(prev => {
       const merged = { ...prev, ...next };
-      try {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-      } catch {
-        /* ignore */
-      }
+      write(merged);
       return merged;
     });
   }, []);
 
-  // Derived values
   const name = (user.name || "").trim();
   const firstName = name ? name.split(/\s+/)[0] : "";
   const initials = name
-    ? name
-        .split(/\s+/)
-        .filter(Boolean)
-        .map((w) => w[0]!.toUpperCase())
-        .slice(0, 2)
-        .join("")
+    ? name.split(/\s+/).filter(Boolean).map(w => w[0]!.toUpperCase()).slice(0, 2).join("")
     : "";
   const hasProfile = name.length > 0;
 

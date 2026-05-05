@@ -5,6 +5,7 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Home, BarChart3, BookOpen, LogOut, LogIn, X, Settings } from "lucide-react";
 import { motion } from "framer-motion";
 import { useUser } from "@/lib/user";
+import { useFinance } from "@/lib/finance";
 
 interface SidebarProps {
   onNavigate?: () => void;
@@ -16,10 +17,11 @@ const navStatus: Record<string, { color: string; label: string } | undefined> = 
 };
 
 export default function Sidebar({ onNavigate }: SidebarProps) {
-  const pathname    = usePathname();
-  const router      = useRouter();
+  const pathname     = usePathname();
+  const router       = useRouter();
   const searchParams = useSearchParams();
   const { firstName, initials, hasProfile, email, updateUser } = useUser();
+  const { reset: resetFinance } = useFinance();
 
   const menuItems = [
     { name: "Home",      path: "/",          icon: Home },
@@ -37,7 +39,10 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
   };
 
   const handleSignOut = () => {
+    // Clear user profile
     updateUser({ name: "", email: "" });
+    // Clear all financial data so dashboard resets to $0
+    resetFinance();
     handleLinkClick();
     router.push("/");
   };
@@ -50,7 +55,7 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
             FinSight
           </h2>
           <button onClick={handleLinkClick}
-            className="p-1 text-slate-400 transition-colors hover:text-white lg:hidden" aria-label="Close sidebar">
+            className="p-1 text-slate-400 transition-colors hover:text-white lg:hidden">
             <X size={20} />
           </button>
         </div>
@@ -101,15 +106,16 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
                 <p className="truncate text-[11px] text-slate-500">{email || "Signed in"}</p>
               </div>
             </div>
+
             <button onClick={handleSignOut}
-              className="group flex w-full items-center gap-3.5 rounded-lg border border-transparent px-3.5 py-2.5 text-sm text-slate-400 transition-colors hover:border-rose-500/20 hover:bg-rose-500/5 hover:text-rose-300">
+              className="group flex w-full items-center gap-3.5 rounded-lg border border-transparent px-3.5 py-2.5 text-sm text-slate-400 transition-all hover:border-rose-500/20 hover:bg-rose-500/5 hover:text-rose-300">
               <LogOut className="h-[18px] w-[18px] transition-transform group-hover:-translate-x-0.5" />
               <span className="font-medium">Log out</span>
             </button>
           </>
         ) : (
           <button onClick={openProfile}
-            className="group flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-3 text-sm font-semibold text-emerald-300 transition-all hover:bg-emerald-500/20 hover:shadow-[0_0_20px_-5px_rgba(16,185,129,0.5)]">
+            className="group flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-3 text-sm font-semibold text-emerald-300 transition-all hover:bg-emerald-500/20 hover:shadow-[0_0_20px_-5px_rgba(16,185,129,0.4)]">
             <LogIn className="h-[18px] w-[18px] transition-transform group-hover:translate-x-0.5" />
             <span>Set up profile</span>
           </button>
@@ -118,4 +124,5 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
     </aside>
   );
 }
+
 
