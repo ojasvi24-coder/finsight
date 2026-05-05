@@ -3,67 +3,34 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Sparkles,
-  TrendingUp,
-  TrendingDown,
-  Plus,
-  Minus,
-  AlertTriangle,
-  CheckCircle2,
-  Info,
-  ChevronDown,
-  ChevronRight,
-  DollarSign,
-  Target,
-  Activity,
-  ArrowUpRight,
-  Zap,
-  Brain,
-  X,
-  RotateCcw,
-  Play,
-  Loader2,
+  Brain, TrendingUp, TrendingDown, Plus, AlertTriangle, CheckCircle2,
+  Info, ChevronDown, DollarSign, Target, Activity, Zap, X, Loader2,
+  UtensilsCrossed, Home, Car, Tv, Bolt, Heart, ShoppingBag, Package,
+  RotateCcw, ArrowRight, Sparkles,
 } from "lucide-react";
 import { useFinance } from "@/lib/finance";
 import { useUser } from "@/lib/user";
 import { monteCarloRetirement } from "@/lib/math";
 
-// ─── tiny helpers ────────────────────────────────────────────────────────────
-const fmt = (v: number) =>
-  v < 0
-    ? `-$${Math.abs(v).toLocaleString()}`
-    : `$${v.toLocaleString()}`;
-
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+const fmt = (v: number) => `$${Math.abs(Math.round(v)).toLocaleString()}`;
 const fmtCompact = (v: number) => {
-  const abs = Math.abs(v);
-  const sign = v < 0 ? "-" : "";
-  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`;
-  if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(0)}k`;
-  return fmt(v);
+  const a = Math.abs(v);
+  const s = v < 0 ? "-" : "";
+  if (a >= 1_000_000) return `${s}$${(a / 1_000_000).toFixed(1)}M`;
+  if (a >= 1_000) return `${s}$${(a / 1_000).toFixed(0)}k`;
+  return `${s}$${a.toLocaleString()}`;
 };
 
-// ─── Animated counter ────────────────────────────────────────────────────────
-function Counter({
-  value,
-  prefix = "$",
-  decimals = 0,
-  className = "",
-}: {
-  value: number;
-  prefix?: string;
-  decimals?: number;
-  className?: string;
-}) {
+// ─── Animated counter ─────────────────────────────────────────────────────────
+function Counter({ value, className = "" }: { value: number; className?: string }) {
   const [display, setDisplay] = useState(value);
   const prev = useRef(value);
   const frame = useRef<number | null>(null);
-
   useEffect(() => {
-    const start = prev.current;
-    const end = value;
+    const start = prev.current, end = value;
     if (start === end) return;
-    const t0 = performance.now();
-    const dur = 700;
+    const t0 = performance.now(), dur = 900;
     const tick = (now: number) => {
       const p = Math.min(1, (now - t0) / dur);
       const ease = 1 - Math.pow(2, -10 * p);
@@ -74,164 +41,103 @@ function Counter({
     frame.current = requestAnimationFrame(tick);
     return () => { if (frame.current) cancelAnimationFrame(frame.current); };
   }, [value]);
-
-  const formatted = display.toLocaleString(undefined, {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
-
-  return (
-    <span className={className}>
-      {prefix}{formatted}
-    </span>
-  );
+  return <span className={className}>${Math.round(display).toLocaleString()}</span>;
 }
 
-// ─── Donut chart ─────────────────────────────────────────────────────────────
-function DonutChart({ segments }: { segments: { label: string; pct: number; color: string }[] }) {
-  const r = 54;
-  const cx = 64;
-  const cy = 64;
+// ─── Circular ring for emergency fund ────────────────────────────────────────
+function RingChart({ pct, size = 80, color = "#10b981", label }: {
+  pct: number; size?: number; color?: string; label: string;
+}) {
+  const r = (size - 12) / 2;
   const circ = 2 * Math.PI * r;
-  let offset = 0;
-
+  const dash = Math.min(1, pct / 100) * circ;
   return (
-    <svg viewBox="0 0 128 128" className="w-full max-w-[140px] mx-auto">
-      {segments.map((seg, i) => {
-        const dash = (seg.pct / 100) * circ;
-        const gap = circ - dash;
-        const el = (
-          <circle
-            key={i}
-            cx={cx}
-            cy={cy}
-            r={r}
-            fill="none"
-            stroke={seg.color}
-            strokeWidth={18}
-            strokeDasharray={`${dash} ${gap}`}
-            strokeDashoffset={-offset}
-            strokeLinecap="butt"
-            style={{ transform: "rotate(-90deg)", transformOrigin: "64px 64px" }}
-          />
-        );
-        offset += dash;
-        return el;
-      })}
-      <circle cx={cx} cy={cy} r={42} fill="#0f172a" />
-    </svg>
-  );
-}
-
-// ─── Sparkline ───────────────────────────────────────────────────────────────
-function Spark({ data, color = "#10b981" }: { data: number[]; color?: string }) {
-  if (data.length < 2) return null;
-  const w = 80, h = 28, pad = 2;
-  const max = Math.max(...data), min = Math.min(...data);
-  const range = max - min || 1;
-  const step = (w - pad * 2) / (data.length - 1);
-  const toY = (v: number) => h - pad - ((v - min) / range) * (h - pad * 2);
-  const d = data.map((v, i) => `${i === 0 ? "M" : "L"} ${pad + i * step} ${toY(v)}`).join(" ");
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h}>
-      <path d={d} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" />
-      <circle cx={pad + (data.length - 1) * step} cy={toY(data[data.length - 1])} r={2.5} fill={color} />
-    </svg>
-  );
-}
-
-// ─── Market Pulse Gauge ───────────────────────────────────────────────────────
-function PulseGauge({ value }: { value: number }) {
-  const label = value < 30 ? "Fear" : value < 55 ? "Neutral" : value < 75 ? "Greed" : "Extreme Greed";
-  const color = value < 30 ? "#f43f5e" : value < 55 ? "#eab308" : value < 75 ? "#10b981" : "#06b6d4";
-  const angle = -90 + (value / 100) * 180;
-  return (
-    <div className="flex flex-col items-center gap-1">
-      <svg viewBox="0 0 120 70" className="w-full max-w-[160px]">
-        <path d="M 10 65 A 50 50 0 0 1 110 65" fill="none" stroke="#1e293b" strokeWidth={10} strokeLinecap="round" />
-        <path d="M 10 65 A 50 50 0 0 1 110 65" fill="none" stroke={color} strokeWidth={10}
-          strokeLinecap="round" opacity={0.3} />
-        <motion.line x1="60" y1="65" x2="60" y2="22" stroke={color} strokeWidth={2.5} strokeLinecap="round"
-          animate={{ rotate: angle }} initial={{ rotate: -90 }}
-          transition={{ duration: 1, ease: "easeOut" }}
-          style={{ transformOrigin: "60px 65px" }} />
-        <circle cx={60} cy={65} r={4} fill={color} />
+    <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#1e293b" strokeWidth={10} />
+        <motion.circle
+          cx={size / 2} cy={size / 2} r={r} fill="none"
+          stroke={color} strokeWidth={10} strokeLinecap="round"
+          strokeDasharray={`${dash} ${circ}`}
+          initial={{ strokeDasharray: `0 ${circ}` }}
+          animate={{ strokeDasharray: `${dash} ${circ}` }}
+          transition={{ duration: 1.2, ease: "easeOut" }}
+        />
       </svg>
-      <div className="text-center">
-        <div className="font-mono text-xl font-bold" style={{ color }}>{Math.round(value)}</div>
-        <div className="text-xs text-slate-400">{label}</div>
+      <div className="absolute text-center">
+        <div className="text-xs font-bold text-white">{Math.round(pct)}%</div>
       </div>
     </div>
   );
 }
 
-// ─── AI Insight Card ──────────────────────────────────────────────────────────
-interface Insight {
-  id: number;
-  type: "warning" | "success" | "info";
-  title: string;
-  message: string;
-  recommendation: string;
-  impact: string;
-  severity: "high" | "medium" | "low";
+// ─── Category config ──────────────────────────────────────────────────────────
+const CATEGORIES = [
+  { name: "Food",           icon: UtensilsCrossed, color: "text-orange-400",  bg: "bg-orange-500/10 border-orange-500/20" },
+  { name: "Housing",        icon: Home,            color: "text-blue-400",    bg: "bg-blue-500/10 border-blue-500/20" },
+  { name: "Transport",      icon: Car,             color: "text-purple-400",  bg: "bg-purple-500/10 border-purple-500/20" },
+  { name: "Entertainment",  icon: Tv,              color: "text-pink-400",    bg: "bg-pink-500/10 border-pink-500/20" },
+  { name: "Utilities",      icon: Bolt,            color: "text-yellow-400",  bg: "bg-yellow-500/10 border-yellow-500/20" },
+  { name: "Healthcare",     icon: Heart,           color: "text-rose-400",    bg: "bg-rose-500/10 border-rose-500/20" },
+  { name: "Shopping",       icon: ShoppingBag,     color: "text-cyan-400",    bg: "bg-cyan-500/10 border-cyan-500/20" },
+  { name: "Other",          icon: Package,         color: "text-slate-400",   bg: "bg-slate-500/10 border-slate-500/20" },
+];
+
+// ─── Market tip based on score ────────────────────────────────────────────────
+function getMarketTip(v: number): string {
+  if (v < 25) return "Extreme fear — historically a buying opportunity for patient investors.";
+  if (v < 45) return "Fear in markets — consider dollar-cost averaging into your positions.";
+  if (v < 55) return "Neutral sentiment — stay the course with your current strategy.";
+  if (v < 75) return "Greed building — stick to your DCA plan, avoid chasing momentum.";
+  return "Extreme greed — markets may be overheated, consider rebalancing now.";
 }
 
+// ─── AI Insight card ─────────────────────────────────────────────────────────
+interface Insight {
+  id: number; type: "warning" | "success" | "info";
+  title: string; message: string; recommendation: string;
+  impact: string; severity: "high" | "medium" | "low";
+}
 function InsightCard({ insight, idx }: { insight: Insight; idx: number }) {
   const [open, setOpen] = useState(false);
-  const colors = {
-    warning: { border: "border-amber-500/30", bg: "bg-amber-500/8", icon: "text-amber-400", badge: "bg-amber-500/15 text-amber-300" },
-    success: { border: "border-emerald-500/30", bg: "bg-emerald-500/8", icon: "text-emerald-400", badge: "bg-emerald-500/15 text-emerald-300" },
-    info: { border: "border-blue-500/30", bg: "bg-blue-500/8", icon: "text-blue-400", badge: "bg-blue-500/15 text-blue-300" },
+  const cfg = {
+    warning: { border: "border-amber-500/25", bg: "", icon: "text-amber-400", badge: "bg-amber-500/15 text-amber-300" },
+    success: { border: "border-emerald-500/25", bg: "", icon: "text-emerald-400", badge: "bg-emerald-500/15 text-emerald-300" },
+    info:    { border: "border-blue-500/25",    bg: "", icon: "text-blue-400",    badge: "bg-blue-500/15 text-blue-300" },
   }[insight.type];
-
   const Icon = insight.type === "warning" ? AlertTriangle : insight.type === "success" ? CheckCircle2 : Info;
-
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: idx * 0.07 }}
-      className={`rounded-xl border ${colors.border} overflow-hidden`}
-    >
-      <button
-        onClick={() => setOpen(!open)}
-        className={`w-full text-left p-4 flex items-start gap-3 hover:bg-white/[0.02] transition-colors`}
-      >
-        <span className={`mt-0.5 flex-shrink-0 ${colors.icon}`}>
-          <Icon className="w-4 h-4" />
-        </span>
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: idx * 0.06 }}
+      className={`rounded-xl border ${cfg.border} overflow-hidden bg-slate-900/40`}>
+      <button onClick={() => setOpen(!open)}
+        className="w-full text-left p-4 flex items-start gap-3 hover:bg-white/[0.02] transition-colors">
+        <Icon className={`w-4 h-4 mt-0.5 flex-shrink-0 ${cfg.icon}`} />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center justify-between gap-2 mb-0.5">
             <p className="font-semibold text-white text-sm">{insight.title}</p>
-            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 ${colors.badge}`}>
+            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 ${cfg.badge}`}>
               {insight.severity}
             </span>
           </div>
-          <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">{insight.message}</p>
+          <p className="text-xs text-slate-400 leading-relaxed">{insight.message}</p>
         </div>
-        <ChevronDown className={`w-4 h-4 text-slate-500 flex-shrink-0 transition-transform mt-0.5 ${open ? "rotate-180" : ""}`} />
+        <ChevronDown className={`w-4 h-4 text-slate-600 flex-shrink-0 transition-transform mt-0.5 ${open ? "rotate-180" : ""}`} />
       </button>
-
       <AnimatePresence>
         {open && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden"
-          >
-            <div className={`px-4 pb-4 space-y-3 border-t ${colors.border}`}>
-              <div className="pt-3 rounded-lg bg-gradient-to-r from-emerald-500/10 to-blue-500/10 border border-white/5 p-3 mt-0">
+          <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }}
+            transition={{ duration: 0.2 }} className="overflow-hidden">
+            <div className={`px-4 pb-4 border-t ${cfg.border} space-y-3`}>
+              <div className="pt-3 bg-gradient-to-r from-emerald-500/8 to-blue-500/8 border border-white/5 rounded-lg p-3">
                 <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider mb-1 flex items-center gap-1">
                   <Brain className="w-3 h-3" /> AI Recommendation
                 </p>
                 <p className="text-xs text-slate-300 leading-relaxed">{insight.recommendation}</p>
               </div>
-              <div className="flex items-center gap-2 text-xs text-slate-400">
-                <DollarSign className="w-3 h-3 text-emerald-400" />
-                <span>{insight.impact}</span>
-              </div>
+              <p className="text-xs text-slate-500 flex items-center gap-1.5">
+                <DollarSign className="w-3 h-3 text-emerald-400" />{insight.impact}
+              </p>
             </div>
           </motion.div>
         )}
@@ -245,728 +151,598 @@ export default function DashboardPage() {
   const finance = useFinance();
   const { firstName } = useUser();
 
-  // ── Local state for the add-money form ──
-  const [entryType, setEntryType] = useState<"income" | "expense">("expense");
+  // form state
+  const [entryType, setEntryType] = useState<"expense" | "income">("expense");
   const [entryName, setEntryName] = useState("");
   const [entryAmount, setEntryAmount] = useState("");
   const [entryCategory, setEntryCategory] = useState("Food");
   const [adding, setAdding] = useState(false);
 
-  // ── Local state for settings ──
+  // settings
   const [showSettings, setShowSettings] = useState(false);
-  const [incomeDraft, setIncomeDraft] = useState("");
-  const [returnDraft, setReturnDraft] = useState("");
 
-  // ── Monte Carlo ──
-  const [simRunning, setSimRunning] = useState(false);
-  const [simResult, setSimResult] = useState<null | {
-    successProbability: number;
-    medianEnding: number;
-    paths: { year: number; p10: number; p50: number; p90: number }[];
-  }>(null);
+  // sim state
   const [simYears, setSimYears] = useState(20);
   const [simGoal, setSimGoal] = useState(1_000_000);
+  const [simRunning, setSimRunning] = useState(false);
+  const [simResult, setSimResult] = useState<null | {
+    successProbability: number; medianEnding: number;
+    paths: { year: number; p10: number; p50: number; p90: number }[];
+  }>(null);
 
-  // ── Market pulse drift ──
-  const [pulse, setPulse] = useState(58);
+  // market pulse
+  const [pulse, setPulse] = useState(62);
   useEffect(() => {
-    const id = setInterval(() => {
-      setPulse(p => Math.max(15, Math.min(92, p + (Math.random() - 0.48) * 3)));
-    }, 4000);
+    const id = setInterval(() => setPulse(p => Math.max(15, Math.min(92, p + (Math.random() - 0.48) * 2.5))), 4000);
     return () => clearInterval(id);
   }, []);
 
-  // ── Derived ──
   const {
-    netWorth, monthlyIncome, totalExpenses, netCashFlow,
-    savingsRate, spendingPercent, transactions, sectors, portfolioValue,
+    netWorth, monthlyIncome, totalExpenses, netCashFlow, savingsRate,
+    spendingPercent, transactions, sectors, portfolioValue,
     portfolioUnrealizedPnL, emergencyFundCurrent, emergencyFundTarget,
-    annualReturn, projectionYears, initialInvestment,
-    isLoaded,
+    annualReturn, initialInvestment, isLoaded,
   } = finance;
 
+  // last transaction for quick-add
+  const lastTx = transactions.length > 0 ? [...transactions].reverse()[0] : null;
+
+  // spending by category for donut
   const spendByCategory = useMemo(() => {
     const map: Record<string, number> = {};
     transactions.forEach(t => { map[t.category] = (map[t.category] || 0) + t.amount; });
-    return Object.entries(map)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5);
+    return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 5);
   }, [transactions]);
 
-  const categoryColors = ["#10b981", "#06b6d4", "#8b5cf6", "#f59e0b", "#f43f5e"];
+  const catColors = ["#10b981","#06b6d4","#8b5cf6","#f59e0b","#f43f5e"];
 
-  const donutSegments = spendByCategory.map(([ label, amt ], i) => ({
-    label,
-    pct: totalExpenses > 0 ? (amt / totalExpenses) * 100 : 0,
-    color: categoryColors[i] || "#475569",
-  }));
-
-  const balanceTrend = useMemo(() => {
-    const base = initialInvestment || 0;
-    return Array.from({ length: 6 }, (_, i) => base + netCashFlow * i);
-  }, [initialInvestment, netCashFlow]);
-
-  // ── AI Insights derived from real data ──
+  // AI Insights
   const insights = useMemo((): Insight[] => {
     const list: Insight[] = [];
-
-    if (savingsRate >= 20) {
-      list.push({
-        id: 1, type: "success", severity: "low",
-        title: "Savings Rate On Track",
-        message: `You're saving ${savingsRate.toFixed(0)}% of your income — above the 20% benchmark.`,
-        recommendation: "Funnel excess savings into a low-cost index fund (VTI or VXUS). At this rate, compound growth will accelerate significantly within 5 years.",
-        impact: `Maintaining this adds ~${fmtCompact(netCashFlow * 12)} to your portfolio annually`,
-      });
-    } else if (monthlyIncome > 0 && savingsRate < 10) {
-      list.push({
-        id: 1, type: "warning", severity: "high",
-        title: "Low Savings Rate",
-        message: `Only ${savingsRate.toFixed(0)}% of income is being saved. Target is 20%+.`,
-        recommendation: "Review your top 3 expense categories and reduce discretionary spend by 10%. Automate transfers to savings on payday.",
-        impact: `Reaching 20% would free ${fmtCompact((monthlyIncome * 0.2 - netCashFlow) || 0)}/month for investing`,
-      });
+    if (monthlyIncome > 0) {
+      if (savingsRate >= 20) {
+        list.push({ id: 1, type: "success", severity: "low",
+          title: "Savings Rate On Track",
+          message: `You're saving ${savingsRate.toFixed(0)}% of income — beating the 20% benchmark.`,
+          recommendation: "Funnel excess into a low-cost index fund (VTI). At this rate, compound growth will significantly accelerate within 5 years.",
+          impact: `Maintaining this adds ${fmtCompact(netCashFlow * 12)} to your portfolio annually`,
+        });
+      } else if (savingsRate < 10) {
+        list.push({ id: 1, type: "warning", severity: "high",
+          title: "Low Savings Rate",
+          message: `Only ${savingsRate.toFixed(0)}% of income saved. Target is 20%+.`,
+          recommendation: "Cut your top 2 expense categories by 15% each. Automate a savings transfer on payday before spending starts.",
+          impact: `Reaching 20% frees ${fmtCompact(monthlyIncome * 0.2 - Math.max(0, netCashFlow))}/month for investing`,
+        });
+      }
     }
-
-    const emergencyPct = emergencyFundTarget > 0
-      ? (emergencyFundCurrent / emergencyFundTarget) * 100
-      : 100;
-    if (emergencyPct < 70) {
-      list.push({
-        id: 2, type: "warning", severity: "medium",
+    const ePct = emergencyFundTarget > 0 ? (emergencyFundCurrent / emergencyFundTarget) * 100 : 100;
+    if (ePct < 70 && emergencyFundTarget > 0) {
+      list.push({ id: 2, type: "warning", severity: "medium",
         title: "Emergency Fund Gap",
-        message: `Your emergency fund covers ${emergencyPct.toFixed(0)}% of your 6-month target.`,
-        recommendation: "Prioritize topping up your emergency fund before investing more. Park it in a high-yield savings account earning 4-5% APY.",
-        impact: `${fmtCompact(emergencyFundTarget - emergencyFundCurrent)} needed to reach full protection`,
+        message: `Your fund covers ${ePct.toFixed(0)}% of your 6-month target.`,
+        recommendation: "Park funds in a high-yield savings account (4–5% APY). Even $200/month gets you there in under a year.",
+        impact: `${fmtCompact(emergencyFundTarget - emergencyFundCurrent)} needed to reach full 6-month cushion`,
       });
     }
-
-    if (portfolioUnrealizedPnL > 0) {
-      list.push({
-        id: 3, type: "success", severity: "low",
+    if (portfolioUnrealizedPnL > 500) {
+      list.push({ id: 3, type: "success", severity: "low",
         title: "Portfolio Gaining",
-        message: `Your portfolio is up ${fmtCompact(portfolioUnrealizedPnL)} in unrealized gains.`,
-        recommendation: "Consider rebalancing if any sector has drifted more than 5% from your target allocation. Lock in gains by trimming high-risk positions.",
-        impact: `Current gain: ${portfolioValue > 0 ? ((portfolioUnrealizedPnL / (portfolioValue - portfolioUnrealizedPnL)) * 100).toFixed(1) : 0}% return on cost`,
+        message: `Up ${fmtCompact(portfolioUnrealizedPnL)} in unrealized gains.`,
+        recommendation: "Rebalance if any sector has drifted more than 5% from your target. Trimming gains while rebalancing is tax-efficient if inside a Roth IRA.",
+        impact: `${portfolioValue > 0 ? ((portfolioUnrealizedPnL / (portfolioValue - portfolioUnrealizedPnL)) * 100).toFixed(1) : 0}% return on cost basis`,
       });
     } else if (portfolioUnrealizedPnL < -500) {
-      list.push({
-        id: 3, type: "info", severity: "medium",
+      list.push({ id: 3, type: "info", severity: "medium",
         title: "Tax-Loss Opportunity",
-        message: `You have ${fmtCompact(Math.abs(portfolioUnrealizedPnL))} in unrealized losses.`,
-        recommendation: "Consider tax-loss harvesting: sell losing positions to offset capital gains, then immediately buy a similar asset. Saves 15-20% in taxes.",
-        impact: `Potential tax saving: ${fmtCompact(Math.abs(portfolioUnrealizedPnL) * 0.2)} at 20% cap gains rate`,
+        message: `${fmtCompact(Math.abs(portfolioUnrealizedPnL))} in unrealized losses detected.`,
+        recommendation: "Sell losing positions to harvest the loss, immediately buy a similar asset to stay invested. Saves 15–20% in capital gains tax.",
+        impact: `Potential tax saving: ${fmtCompact(Math.abs(portfolioUnrealizedPnL) * 0.2)}`,
       });
     }
-
-    const highRiskSectors = sectors.filter(s => s.risk > 65);
-    if (highRiskSectors.length >= 2) {
-      list.push({
-        id: 4, type: "warning", severity: "medium",
+    const highRisk = sectors.filter(s => s.risk > 65);
+    if (highRisk.length >= 2) {
+      list.push({ id: 4, type: "warning", severity: "medium",
         title: "Concentrated Risk",
-        message: `${highRiskSectors.length} sectors show high volatility (risk score > 65).`,
-        recommendation: "Shift 10-15% of high-risk sector exposure into bonds or a stable ETF like BND. Diversification reduces drawdown risk without sacrificing much upside.",
-        impact: "Reduces portfolio volatility by an estimated 8-12%",
+        message: `${highRisk.length} sectors show high volatility (risk > 65).`,
+        recommendation: "Shift 10–15% of high-risk exposure into BND (total bond market). Reduces drawdown risk without sacrificing much long-term upside.",
+        impact: "Estimated 8–12% reduction in portfolio volatility",
       });
     }
-
-    if (monthlyIncome > 0) {
-      list.push({
-        id: 5, type: "info", severity: "low",
-        title: "Tax-Advantaged Account Check",
-        message: "Maximizing 401(k) and Roth IRA before taxable investing can save thousands yearly.",
-        recommendation: "Step 1: Get full employer match. Step 2: Max HSA ($4,300/yr triple tax-free). Step 3: Max Roth IRA ($7,000/yr). Step 4: Increase 401(k) to $23,500 limit.",
-        impact: "Could reduce your tax bill by $3,000–$8,000+ per year depending on income",
-      });
-    }
-
+    list.push({ id: 5, type: "info", severity: "low",
+      title: "Tax-Advantaged Accounts",
+      message: "Maximizing 401(k) and Roth IRA beats taxable investing every time.",
+      recommendation: "Priority: (1) Get full employer match, (2) Max HSA $4,300/yr triple tax-free, (3) Max Roth IRA $7,000/yr, (4) Max 401(k) $23,500.",
+      impact: "Could reduce your tax bill by $3,000–$8,000+ per year",
+    });
     return list;
   }, [savingsRate, monthlyIncome, emergencyFundCurrent, emergencyFundTarget,
       portfolioUnrealizedPnL, portfolioValue, sectors, netCashFlow]);
 
-  // ── Add entry ──
-  const handleAddEntry = () => {
+  // Add entry
+  const handleAdd = () => {
     const amount = parseFloat(entryAmount);
     if (!amount || amount <= 0 || !entryName.trim()) return;
     setAdding(true);
     setTimeout(() => {
       if (entryType === "expense") {
-        finance.addTransaction({
-          name: entryName.trim(),
-          category: entryCategory,
-          amount,
-          date: new Date().toISOString().split("T")[0],
-          type: "expense",
-        });
+        finance.addTransaction({ name: entryName.trim(), category: entryCategory, amount, date: new Date().toISOString().split("T")[0], type: "expense" });
       } else {
         finance.update({ monthlyIncome: finance.monthlyIncome + amount });
       }
-      setEntryName("");
-      setEntryAmount("");
-      setAdding(false);
-    }, 300);
+      setEntryName(""); setEntryAmount(""); setAdding(false);
+    }, 250);
   };
 
-  // ── Run Monte Carlo ──
+  const quickAddLast = () => {
+    if (!lastTx) return;
+    finance.addTransaction({ name: lastTx.name, category: lastTx.category, amount: lastTx.amount, date: new Date().toISOString().split("T")[0], type: "expense" });
+  };
+
+  // Run Monte Carlo (real-time on slider change)
   const runSim = () => {
     setSimRunning(true);
     setTimeout(() => {
       const r = monteCarloRetirement({
-        initial: portfolioValue || initialInvestment || 0,
+        initial: Math.max(portfolioValue, initialInvestment, 0),
         monthlyContribution: Math.max(0, netCashFlow),
         annualReturn: (annualReturn || 8) / 100,
         annualVolatility: 0.15,
         years: simYears,
         goal: simGoal,
-        trials: 5000,
+        trials: 3000,
       });
       setSimResult(r);
       setSimRunning(false);
-    }, 50);
+    }, 30);
   };
 
-  // ── Sim chart SVG ──
+  // preview paths (faint, before running)
+  const previewChart = useMemo(() => {
+    const w = 280, h = 80, pad = 8;
+    const base = Math.max(portfolioValue, initialInvestment, 1000);
+    const r1 = (annualReturn || 8) / 100 / 12;
+    const r2 = ((annualReturn || 8) / 100 + 0.04) / 12;
+    const mc = Math.max(0, netCashFlow);
+    const pts1: number[] = [], pts2: number[] = [];
+    let v1 = base, v2 = base;
+    for (let i = 0; i <= simYears; i++) {
+      pts1.push(v1); pts2.push(v2);
+      for (let m = 0; m < 12; m++) { v1 = v1 * (1 + r1) + mc; v2 = v2 * (1 + r2) + mc; }
+    }
+    const max = Math.max(...pts2, simGoal);
+    const step = (w - pad * 2) / simYears;
+    const toY = (v: number) => h - pad - (v / max) * (h - pad * 2);
+    const line = (pts: number[]) => pts.map((v, i) => `${i === 0 ? "M" : "L"} ${pad + i * step} ${toY(v)}`).join(" ");
+    return { p1: line(pts1), p2: line(pts2), goalY: toY(simGoal), w, h };
+  }, [simYears, simGoal, portfolioValue, initialInvestment, annualReturn, netCashFlow]);
+
+  // sim result chart
   const simChart = useMemo(() => {
     if (!simResult) return null;
-    const paths = simResult.paths;
-    const w = 280, h = 100, pad = 10;
-    const all = paths.flatMap(p => [p.p10, p.p50, p.p90]);
-    const max = Math.max(...all, simGoal);
+    const { paths } = simResult;
+    const w = 280, h = 90, pad = 8;
+    const max = Math.max(...paths.flatMap(p => [p.p10, p.p50, p.p90]), simGoal);
     const step = (w - pad * 2) / Math.max(1, paths.length - 1);
     const toY = (v: number) => h - pad - (v / max) * (h - pad * 2);
-    const line = (getter: (p: typeof paths[0]) => number) =>
-      paths.map((p, i) => `${i === 0 ? "M" : "L"} ${pad + i * step} ${toY(getter(p))}`).join(" ");
-    const goalY = toY(simGoal);
-    return { p10: line(p => p.p10), p50: line(p => p.p50), p90: line(p => p.p90), goalY, w, h, pad };
+    const line = (get: (p: typeof paths[0]) => number) =>
+      paths.map((p, i) => `${i === 0 ? "M" : "L"} ${pad + i * step} ${toY(get(p))}`).join(" ");
+    return { p10: line(p => p.p10), p50: line(p => p.p50), p90: line(p => p.p90), goalY: toY(simGoal), w, h };
   }, [simResult, simGoal]);
 
-  if (!isLoaded) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <div className="flex items-center gap-3 text-slate-400">
-          <Loader2 className="w-5 h-5 animate-spin text-emerald-400" />
-          <span className="text-sm">Loading your dashboard…</span>
-        </div>
-      </div>
-    );
-  }
+  const emergencyPct = emergencyFundTarget > 0 ? Math.min(100, (emergencyFundCurrent / emergencyFundTarget) * 100) : 0;
+  const pulseColor = pulse < 30 ? "#f43f5e" : pulse < 55 ? "#eab308" : pulse < 75 ? "#10b981" : "#06b6d4";
+  const pulseLabel = pulse < 30 ? "Extreme Fear" : pulse < 55 ? "Fear/Neutral" : pulse < 75 ? "Greed" : "Extreme Greed";
 
-  const greeting = firstName ? `Hey, ${firstName}` : "Dashboard";
-  const isEmptyState = monthlyIncome === 0 && transactions.length === 0;
+  if (!isLoaded) return (
+    <div className="flex h-96 items-center justify-center">
+      <Loader2 className="w-5 h-5 animate-spin text-emerald-400" />
+    </div>
+  );
 
   return (
-    <div className="space-y-6 pb-20">
+    <div className="space-y-8 pb-24">
 
-      {/* ── Hero Header ── */}
-      <motion.div
-        initial={{ opacity: 0, y: -12 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex items-start justify-between gap-4"
-      >
-        <div>
-          <p className="text-sm text-slate-400 mb-1">{greeting} · {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</p>
-          <div className="flex items-baseline gap-3">
-            <Counter
-              value={netWorth}
-              className="text-4xl font-black text-white tracking-tight"
-            />
-            {netCashFlow !== 0 && (
-              <span className={`text-sm font-semibold flex items-center gap-1 ${netCashFlow >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                {netCashFlow >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-                {fmtCompact(netCashFlow)}/mo
-              </span>
+      {/* ══ HERO NET WORTH ═══════════════════════════════════════════════════ */}
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
+        className="relative overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900 to-slate-950 p-8">
+        {/* ambient glow */}
+        <div className="absolute -top-20 -right-20 w-64 h-64 rounded-full bg-emerald-500/5 blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-10 -left-10 w-48 h-48 rounded-full bg-blue-500/5 blur-3xl pointer-events-none" />
+
+        <div className="relative">
+          <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-2">
+            {firstName ? `${firstName}'s` : "Your"} Total Net Worth
+          </p>
+          <Counter value={netWorth}
+            className="text-5xl sm:text-6xl font-black text-white tracking-tight tabular-nums" />
+
+          <div className="flex flex-wrap items-center gap-4 mt-4">
+            {/* Savings rate badge */}
+            {savingsRate > 0 && (
+              <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
+                savingsRate >= 20 ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/20"
+                  : "bg-amber-500/15 text-amber-300 border border-amber-500/20"}`}>
+                <TrendingUp className="w-3 h-3" />
+                {savingsRate.toFixed(0)}% savings rate
+                {savingsRate >= 20 && " 🎉"}
+              </div>
             )}
+            {netCashFlow !== 0 && (
+              <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
+                netCashFlow >= 0 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                  : "bg-rose-500/10 text-rose-400 border-rose-500/20"}`}>
+                {netCashFlow >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                {fmtCompact(Math.abs(netCashFlow))}/mo net
+              </div>
+            )}
+            <button onClick={() => setShowSettings(!showSettings)}
+              className="ml-auto text-xs text-slate-500 hover:text-slate-300 transition-colors border border-slate-800 rounded-lg px-3 py-1 hover:border-slate-700">
+              {showSettings ? "Done" : "Edit settings"}
+            </button>
           </div>
-          <p className="text-xs text-slate-500 mt-1">Total net worth</p>
+
+          {/* Settings panel */}
+          <AnimatePresence>
+            {showSettings && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }} className="overflow-hidden mt-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-slate-800">
+                  {[
+                    { label: "Monthly Income", key: "monthlyIncome" as const, placeholder: "e.g. 6000" },
+                    { label: "Annual Return %", key: "annualReturn" as const, placeholder: "e.g. 8" },
+                    { label: "Portfolio Value", key: "initialInvestment" as const, placeholder: "e.g. 50000" },
+                    { label: "Emergency Target", key: "emergencyFundTarget" as const, placeholder: "e.g. 18000" },
+                  ].map(field => (
+                    <div key={field.key}>
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">{field.label}</label>
+                      <input type="number" placeholder={field.placeholder}
+                        defaultValue={finance[field.key] || ""}
+                        onBlur={e => { const v = parseFloat(e.target.value); if (!isNaN(v) && v >= 0) finance.update({ [field.key]: v }); }}
+                        className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-emerald-500/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
-        <button
-          onClick={() => setShowSettings(!showSettings)}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-700 text-xs text-slate-400 hover:text-white hover:border-slate-600 transition-colors"
-        >
-          Settings
-        </button>
       </motion.div>
 
-      {/* ── Settings panel ── */}
-      <AnimatePresence>
-        {showSettings && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Monthly Income</label>
-                <input
-                  type="number"
-                  placeholder="e.g. 6000"
-                  value={incomeDraft}
-                  onChange={e => setIncomeDraft(e.target.value)}
-                  onBlur={() => {
-                    const v = parseFloat(incomeDraft);
-                    if (!isNaN(v) && v >= 0) finance.update({ monthlyIncome: v });
-                  }}
-                  className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-emerald-500/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Expected Return %</label>
-                <input
-                  type="number"
-                  placeholder="e.g. 8"
-                  value={returnDraft}
-                  onChange={e => setReturnDraft(e.target.value)}
-                  onBlur={() => {
-                    const v = parseFloat(returnDraft);
-                    if (!isNaN(v) && v >= 0 && v <= 30) finance.update({ annualReturn: v });
-                  }}
-                  className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-emerald-500/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Starting Portfolio ($)</label>
-                <input
-                  type="number"
-                  placeholder="e.g. 50000"
-                  defaultValue={initialInvestment || ""}
-                  onBlur={e => {
-                    const v = parseFloat(e.target.value);
-                    if (!isNaN(v) && v >= 0) finance.update({ initialInvestment: v });
-                  }}
-                  className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-emerald-500/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Emergency Fund Target ($)</label>
-                <input
-                  type="number"
-                  placeholder="e.g. 18000"
-                  defaultValue={finance.emergencyFundTarget || ""}
-                  onBlur={e => {
-                    const v = parseFloat(e.target.value);
-                    if (!isNaN(v) && v >= 0) finance.update({ emergencyFundTarget: v });
-                  }}
-                  className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-emerald-500/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                />
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ── Empty state prompt ── */}
-      {isEmptyState && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 flex items-center gap-3"
-        >
-          <Sparkles className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-          <div>
-            <p className="text-sm font-semibold text-white">Start by adding your income and expenses</p>
-            <p className="text-xs text-slate-400 mt-0.5">Use the form below to log your first transaction — AI insights will activate automatically.</p>
-          </div>
-        </motion.div>
-      )}
-
-      {/* ── KPI Strip ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {/* ══ KPI ROW ══════════════════════════════════════════════════════════ */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          {
-            label: "Monthly Income",
-            value: monthlyIncome,
-            sub: "gross take-home",
-            color: "text-emerald-400",
-            icon: TrendingUp,
-            spark: balanceTrend,
-            sparkColor: "#10b981",
-          },
-          {
-            label: "Monthly Spend",
-            value: totalExpenses,
-            sub: `${spendingPercent.toFixed(0)}% of income`,
-            color: totalExpenses > monthlyIncome * 0.8 ? "text-rose-400" : "text-slate-200",
-            icon: TrendingDown,
-            spark: [],
-            sparkColor: "#f43f5e",
-          },
-          {
-            label: "Net Cash Flow",
-            value: netCashFlow,
-            sub: `${savingsRate.toFixed(0)}% savings rate`,
-            color: netCashFlow >= 0 ? "text-emerald-400" : "text-rose-400",
-            icon: Activity,
-            spark: [],
-            sparkColor: netCashFlow >= 0 ? "#10b981" : "#f43f5e",
-          },
-          {
-            label: "Portfolio Value",
-            value: portfolioValue,
-            sub: portfolioUnrealizedPnL !== 0 ? `${portfolioUnrealizedPnL >= 0 ? "+" : ""}${fmtCompact(portfolioUnrealizedPnL)} unrealized` : "invested assets",
-            color: "text-blue-400",
-            icon: Target,
-            spark: [],
-            sparkColor: "#06b6d4",
-          },
-        ].map(({ label, value, sub, color, icon: Icon, spark, sparkColor }, i) => (
-          <motion.div
-            key={label}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.06 }}
-            className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 relative overflow-hidden"
-          >
-            <div className="flex items-start justify-between mb-2">
-              <p className="text-xs text-slate-500 font-medium">{label}</p>
-              {spark.length > 0 && <Spark data={spark} color={sparkColor} />}
-            </div>
+          { label: "Monthly Income", value: monthlyIncome, color: "text-emerald-400", sub: "take-home" },
+          { label: "Monthly Spend",  value: totalExpenses, color: totalExpenses > monthlyIncome * 0.8 ? "text-rose-400" : "text-white", sub: `${spendingPercent.toFixed(0)}% of income` },
+          { label: "Net Cash Flow",  value: netCashFlow,   color: netCashFlow >= 0 ? "text-emerald-400" : "text-rose-400", sub: "income − expenses" },
+          { label: "Portfolio",      value: portfolioValue, color: "text-blue-400", sub: portfolioUnrealizedPnL !== 0 ? `${portfolioUnrealizedPnL >= 0 ? "+" : ""}${fmtCompact(portfolioUnrealizedPnL)} P&L` : "invested" },
+        ].map(({ label, value, color, sub }, i) => (
+          <motion.div key={label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.05 }}
+            className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+            <p className="text-[11px] text-slate-500 font-medium mb-1">{label}</p>
             <p className={`text-xl font-bold tracking-tight ${color}`}>{fmtCompact(value)}</p>
-            <p className="text-[10px] text-slate-500 mt-0.5">{sub}</p>
+            <p className="text-[10px] text-slate-600 mt-0.5">{sub}</p>
           </motion.div>
         ))}
       </div>
 
-      {/* ── Main 3-col layout ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* ══ MAIN GRID: ACTION | ANALYSIS ═════════════════════════════════════ */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-        {/* LEFT: Cash Flow Manager */}
-        <div className="space-y-4">
-          <div className="rounded-xl border border-slate-800 bg-slate-900/50 overflow-hidden">
-            <div className="p-4 border-b border-slate-800">
-              <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-                <Plus className="w-4 h-4 text-emerald-400" />
-                Add Transaction
+        {/* ── ACTION COLUMN ── */}
+        <div className="space-y-5">
+
+          {/* Add Transaction */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 overflow-hidden">
+            <div className="px-5 pt-5 pb-4">
+              <h2 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                <Plus className="w-4 h-4 text-emerald-400" /> Add Transaction
               </h2>
-            </div>
 
-            <div className="p-4 space-y-3">
               {/* Type toggle */}
-              <div className="flex rounded-lg bg-slate-950/60 p-1 gap-1">
+              <div className="flex rounded-xl bg-slate-950/70 p-1 gap-1 mb-4">
                 {(["expense", "income"] as const).map(t => (
-                  <button
-                    key={t}
-                    onClick={() => setEntryType(t)}
-                    className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all ${
-                      entryType === t
-                        ? t === "expense"
-                          ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
-                          : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                        : "text-slate-500 hover:text-slate-300"
-                    }`}
-                  >
+                  <button key={t} onClick={() => setEntryType(t)}
+                    className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${entryType === t
+                      ? t === "expense"
+                        ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                        : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                      : "text-slate-500 hover:text-slate-300"}`}>
                     {t === "expense" ? "− Expense" : "+ Income"}
                   </button>
                 ))}
               </div>
 
-              {/* Name */}
-              <input
-                placeholder={entryType === "expense" ? "e.g. Grocery Store" : "e.g. Freelance payment"}
-                value={entryName}
-                onChange={e => setEntryName(e.target.value)}
-                className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/50 transition-colors"
-              />
+              {/* Description */}
+              <input placeholder={entryType === "expense" ? "e.g. Coffee, Rent, Uber…" : "e.g. Freelance, Salary…"}
+                value={entryName} onChange={e => setEntryName(e.target.value)}
+                className="w-full bg-slate-950/60 border border-slate-700/80 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/40 transition-colors mb-3" />
 
               {/* Amount */}
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-mono">$</span>
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="0"
-                  value={entryAmount}
-                  onChange={e => setEntryAmount(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && handleAddEntry()}
-                  className="w-full bg-slate-950/60 border border-slate-700 rounded-lg pl-7 pr-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/50 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                />
+              <div className="relative mb-4">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-sm">$</span>
+                <input type="number" min="0" placeholder="0"
+                  value={entryAmount} onChange={e => setEntryAmount(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && handleAdd()}
+                  className="w-full bg-slate-950/60 border border-slate-700/80 rounded-xl pl-8 pr-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/40 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
               </div>
 
-              {/* Category (only for expense) */}
+              {/* Category icons (only for expense) */}
               {entryType === "expense" && (
-                <select
-                  value={entryCategory}
-                  onChange={e => setEntryCategory(e.target.value)}
-                  className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-emerald-500/50 transition-colors"
-                >
-                  {["Food", "Housing", "Transportation", "Entertainment", "Utilities", "Healthcare", "Shopping", "Other"].map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
+                <div className="grid grid-cols-4 gap-2 mb-4">
+                  {CATEGORIES.map(cat => {
+                    const Icon = cat.icon;
+                    const active = entryCategory === cat.name;
+                    return (
+                      <button key={cat.name} onClick={() => setEntryCategory(cat.name)}
+                        className={`flex flex-col items-center gap-1 py-2 rounded-xl border text-center transition-all ${active ? cat.bg + " " + cat.color : "border-slate-800 text-slate-600 hover:border-slate-700 hover:text-slate-400"}`}>
+                        <Icon className="w-4 h-4" />
+                        <span className="text-[9px] font-semibold leading-none">{cat.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               )}
 
-              <button
-                onClick={handleAddEntry}
-                disabled={!entryAmount || !entryName.trim() || adding}
-                className="w-full py-2.5 rounded-lg bg-emerald-500 text-slate-950 text-sm font-bold transition-all hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                Add {entryType === "expense" ? "Expense" : "Income"}
-              </button>
+              <div className="flex gap-2">
+                <button onClick={handleAdd}
+                  disabled={!entryAmount || !entryName.trim() || adding}
+                  className="flex-1 py-2.5 rounded-xl bg-emerald-500 text-slate-950 text-sm font-bold transition-all hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                  {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  Add {entryType === "expense" ? "Expense" : "Income"}
+                </button>
+                {lastTx && entryType === "expense" && (
+                  <button onClick={quickAddLast} title={`Quick add: ${lastTx.name} $${lastTx.amount}`}
+                    className="px-3 py-2.5 rounded-xl border border-slate-700 text-slate-400 hover:border-slate-600 hover:text-white transition-colors flex items-center gap-1.5 text-xs font-semibold whitespace-nowrap">
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    Repeat
+                  </button>
+                )}
+              </div>
+              {lastTx && entryType === "expense" && (
+                <p className="text-[10px] text-slate-600 mt-1.5 text-right">
+                  Last: {lastTx.name} · ${lastTx.amount}
+                </p>
+              )}
             </div>
           </div>
 
-          {/* Recent transactions */}
+          {/* Recent Transactions */}
           {transactions.length > 0 && (
-            <div className="rounded-xl border border-slate-800 bg-slate-900/50 overflow-hidden">
-              <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-white">Recent Transactions</h2>
-                <span className="text-[10px] text-slate-500">{transactions.length} total</span>
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/50 overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
+                <h2 className="text-sm font-bold text-white">Recent Transactions</h2>
+                <span className="text-[10px] text-slate-500 bg-slate-800/60 px-2 py-0.5 rounded-full">{transactions.length}</span>
               </div>
-              <div className="divide-y divide-slate-800/60 max-h-[280px] overflow-y-auto">
-                {[...transactions].reverse().slice(0, 8).map(tx => (
-                  <div key={tx.id} className="flex items-center gap-3 px-4 py-3 hover:bg-white/[0.02] group transition-colors">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-white truncate">{tx.name}</p>
-                      <p className="text-[10px] text-slate-500">{tx.category}</p>
+              <div className="divide-y divide-slate-800/60 max-h-64 overflow-y-auto">
+                {[...transactions].reverse().slice(0, 10).map(tx => {
+                  const cat = CATEGORIES.find(c => c.name === tx.category);
+                  const Icon = cat?.icon || Package;
+                  return (
+                    <div key={tx.id} className="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.02] group transition-colors">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${cat?.bg || "bg-slate-800/60 border-slate-700"} border`}>
+                        <Icon className={`w-3.5 h-3.5 ${cat?.color || "text-slate-400"}`} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-white truncate">{tx.name}</p>
+                        <p className="text-[10px] text-slate-500">{tx.category}</p>
+                      </div>
+                      <span className="text-sm font-mono font-semibold text-rose-400">−${tx.amount.toLocaleString()}</span>
+                      <button onClick={() => finance.deleteTransaction(tx.id)}
+                        className="opacity-0 group-hover:opacity-100 text-slate-700 hover:text-rose-400 transition-all ml-1">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                    <span className="text-sm font-mono text-rose-400 font-semibold">
-                      −${tx.amount.toLocaleString()}
-                    </span>
-                    <button
-                      onClick={() => finance.deleteTransaction(tx.id)}
-                      className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-rose-400 transition-all"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
+              {/* Spending donut summary */}
+              {spendByCategory.length > 0 && (
+                <div className="px-5 py-4 border-t border-slate-800">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-3">Spend by category</p>
+                  <div className="space-y-2">
+                    {spendByCategory.map(([cat, amt], i) => (
+                      <div key={cat} className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: catColors[i] }} />
+                        <span className="text-xs text-slate-400 flex-1">{cat}</span>
+                        <div className="w-24 h-1 bg-slate-800 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${totalExpenses > 0 ? (amt / totalExpenses) * 100 : 0}%`, background: catColors[i] }} />
+                        </div>
+                        <span className="text-[10px] font-mono text-slate-400 w-10 text-right">{totalExpenses > 0 ? ((amt / totalExpenses) * 100).toFixed(0) : 0}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Emergency fund */}
-          <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-white">Emergency Fund</h2>
-              <span className="text-xs font-mono text-slate-400">
-                {emergencyFundTarget > 0 ? `${Math.min(100, (emergencyFundCurrent / emergencyFundTarget * 100)).toFixed(0)}%` : "—"}
-              </span>
-            </div>
-            <div className="h-2 rounded-full bg-slate-800 overflow-hidden mb-2">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${Math.min(100, emergencyFundTarget > 0 ? (emergencyFundCurrent / emergencyFundTarget * 100) : 0)}%` }}
-                transition={{ duration: 1, ease: "easeOut" }}
-                className={`h-full rounded-full ${emergencyFundCurrent >= emergencyFundTarget ? "bg-emerald-500" : "bg-amber-500"}`}
-              />
-            </div>
-            <div className="flex justify-between text-xs text-slate-500">
-              <span>{fmtCompact(emergencyFundCurrent)} saved</span>
-              <span>Goal: {fmtCompact(emergencyFundTarget)}</span>
-            </div>
-            <div className="flex gap-2 mt-3">
-              <button
-                onClick={() => finance.update({ emergencyFundCurrent: Math.max(0, emergencyFundCurrent - 500) })}
-                className="flex-1 py-1.5 text-xs border border-slate-700 rounded-lg text-slate-400 hover:text-white hover:border-slate-600 transition-colors"
-              >
-                − $500
-              </button>
-              <button
-                onClick={() => finance.update({ emergencyFundCurrent: emergencyFundCurrent + 500 })}
-                className="flex-1 py-1.5 text-xs border border-emerald-500/30 bg-emerald-500/10 rounded-lg text-emerald-300 hover:bg-emerald-500/20 transition-colors"
-              >
-                + $500
-              </button>
+          {/* Emergency Fund */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5">
+            <div className="flex items-center gap-4">
+              <RingChart pct={emergencyPct} size={72}
+                color={emergencyPct >= 100 ? "#10b981" : emergencyPct >= 60 ? "#f59e0b" : "#f43f5e"}
+                label={`${Math.round(emergencyPct)}%`} />
+              <div className="flex-1">
+                <h3 className="text-sm font-bold text-white mb-0.5">Emergency Fund</h3>
+                <p className="text-xs text-slate-400 mb-2">
+                  {fmtCompact(emergencyFundCurrent)} of {fmtCompact(emergencyFundTarget)} goal
+                </p>
+                <div className="flex gap-2">
+                  <button onClick={() => finance.update({ emergencyFundCurrent: Math.max(0, emergencyFundCurrent - 500) })}
+                    className="flex-1 py-1.5 text-xs border border-slate-700 rounded-lg text-slate-400 hover:text-white hover:border-slate-600 transition-colors">− $500</button>
+                  <button onClick={() => finance.update({ emergencyFundCurrent: emergencyFundCurrent + 500 })}
+                    className="flex-1 py-1.5 text-xs border border-emerald-500/30 bg-emerald-500/8 rounded-lg text-emerald-300 hover:bg-emerald-500/15 transition-colors">+ $500</button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* CENTER: AI Insights */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="flex items-center gap-2">
-              <motion.div
-                animate={{ scale: [1, 1.1, 1] }}
-                transition={{ duration: 2, repeat: Infinity }}
-              >
+        {/* ── ANALYSIS COLUMN ── */}
+        <div className="space-y-5">
+
+          {/* AI Insights */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <motion.div animate={{ scale: [1, 1.12, 1] }} transition={{ duration: 2.5, repeat: Infinity }}>
                 <Brain className="w-5 h-5 text-emerald-400" />
               </motion.div>
-              <h2 className="text-sm font-semibold text-white">AI Financial Insights</h2>
+              <h2 className="text-sm font-bold text-white">AI Financial Insights</h2>
+              <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/12 text-emerald-400 font-bold border border-emerald-500/20">
+                {insights.length} active
+              </span>
             </div>
-            <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-semibold">
-              {insights.length} active
-            </span>
+
+            {insights.length === 0 ? (
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-8 text-center">
+                <Sparkles className="w-8 h-8 text-slate-700 mx-auto mb-3" />
+                <p className="text-sm text-slate-500">Add income and expenses to unlock personalized AI insights.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {insights.map((ins, i) => <InsightCard key={ins.id} insight={ins} idx={i} />)}
+              </div>
+            )}
           </div>
 
-          {insights.length === 0 ? (
-            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-8 text-center">
-              <Sparkles className="w-8 h-8 text-slate-600 mx-auto mb-3" />
-              <p className="text-sm text-slate-400">Add your income and expenses to unlock AI insights tailored to your financial data.</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {insights.map((insight, i) => (
-                <InsightCard key={insight.id} insight={insight} idx={i} />
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* RIGHT: Wealth Forecast + Market */}
-        <div className="space-y-4">
-
-          {/* Monte Carlo */}
-          <div className="rounded-xl border border-slate-800 bg-slate-900/50 overflow-hidden">
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-                <Zap className="w-4 h-4 text-blue-400" />
-                Wealth Forecast
-              </h2>
-              <span className="text-[10px] text-slate-500">Monte Carlo</span>
-            </div>
-            <div className="p-4 space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Years</label>
-                  <input
-                    type="number"
-                    value={simYears}
-                    min={1} max={50}
-                    onChange={e => setSimYears(Number(e.target.value))}
-                    className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-blue-500/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Goal ($)</label>
-                  <input
-                    type="number"
-                    value={simGoal}
-                    step={50000}
-                    onChange={e => setSimGoal(Number(e.target.value))}
-                    className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-blue-500/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  />
+          {/* Market Sentiment */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5">
+            <h2 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+              <Activity className="w-4 h-4 text-amber-400" /> Market Sentiment
+            </h2>
+            <div className="flex items-center gap-5">
+              {/* Gauge */}
+              <div className="relative flex-shrink-0" style={{ width: 96, height: 96 }}>
+                <svg width={96} height={96} className="-rotate-90">
+                  <circle cx={48} cy={48} r={38} fill="none" stroke="#1e293b" strokeWidth={10} />
+                  <motion.circle cx={48} cy={48} r={38} fill="none" stroke={pulseColor} strokeWidth={10}
+                    strokeLinecap="round"
+                    strokeDasharray={`${(pulse / 100) * 2 * Math.PI * 38} ${2 * Math.PI * 38}`}
+                    animate={{ strokeDasharray: `${(pulse / 100) * 2 * Math.PI * 38} ${2 * Math.PI * 38}` }}
+                    transition={{ duration: 1, ease: "easeOut" }} />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-xl font-black" style={{ color: pulseColor }}>{Math.round(pulse)}</span>
+                  <span className="text-[9px] text-slate-500 font-semibold">/100</span>
                 </div>
               </div>
+              <div>
+                <p className="font-bold text-sm mb-1" style={{ color: pulseColor }}>{pulseLabel}</p>
+                <p className="text-xs text-slate-400 leading-relaxed">{getMarketTip(pulse)}</p>
+                <p className="text-[10px] text-slate-600 mt-2">Fear & Greed Index · Updates live</p>
+              </div>
+            </div>
+          </div>
 
-              <button
-                onClick={runSim}
-                disabled={simRunning}
-                className="w-full py-2.5 rounded-lg border border-blue-500/30 bg-blue-500/10 text-blue-300 text-sm font-semibold hover:bg-blue-500/20 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-              >
+          {/* Wealth Forecast */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 overflow-hidden">
+            <div className="flex items-center justify-between px-5 pt-5 pb-1">
+              <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                <Zap className="w-4 h-4 text-blue-400" /> Wealth Forecast
+              </h2>
+              <span className="text-[10px] text-slate-500">Monte Carlo · 3,000 trials</span>
+            </div>
+
+            {/* Preview chart (always visible) */}
+            <div className="px-5 py-3">
+              <svg viewBox={`0 0 ${previewChart.w} ${previewChart.h}`} className="w-full">
+                <line x1={8} y1={previewChart.goalY} x2={previewChart.w - 8} y2={previewChart.goalY}
+                  stroke="#f59e0b" strokeDasharray="3 3" strokeWidth={1} opacity={0.5} />
+                <path d={previewChart.p1} fill="none" stroke="#475569" strokeWidth={1.5} opacity={0.4} />
+                <path d={previewChart.p2} fill="none" stroke="#10b981" strokeWidth={2} opacity={0.3} />
+              </svg>
+              <div className="flex justify-between text-[10px] text-slate-600 mt-0.5">
+                <span>Conservative</span><span className="text-amber-600">Goal</span><span>Optimistic</span>
+              </div>
+            </div>
+
+            {/* Sliders */}
+            <div className="px-5 pb-4 space-y-4">
+              <div>
+                <div className="flex justify-between mb-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Years</label>
+                  <span className="text-xs font-bold text-white font-mono">{simYears} yrs</span>
+                </div>
+                <input type="range" min={5} max={50} step={1} value={simYears}
+                  onChange={e => { setSimYears(Number(e.target.value)); setSimResult(null); }}
+                  className="w-full h-1.5 appearance-none bg-slate-800 rounded-full outline-none accent-blue-500 cursor-pointer" />
+              </div>
+              <div>
+                <div className="flex justify-between mb-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Goal</label>
+                  <span className="text-xs font-bold text-white font-mono">{fmtCompact(simGoal)}</span>
+                </div>
+                <input type="range" min={100000} max={5000000} step={50000} value={simGoal}
+                  onChange={e => { setSimGoal(Number(e.target.value)); setSimResult(null); }}
+                  className="w-full h-1.5 appearance-none bg-slate-800 rounded-full outline-none accent-blue-500 cursor-pointer" />
+              </div>
+
+              <button onClick={runSim} disabled={simRunning}
+                className="w-full py-2.5 rounded-xl border border-blue-500/30 bg-blue-500/10 text-blue-300 text-sm font-bold hover:bg-blue-500/18 transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
                 {simRunning
-                  ? <><Loader2 className="w-4 h-4 animate-spin" />Running 5,000 simulations…</>
-                  : <><Play className="w-4 h-4" />Run Simulation</>
-                }
+                  ? <><Loader2 className="w-4 h-4 animate-spin" />Running…</>
+                  : <><Activity className="w-4 h-4" />Run Simulation</>}
               </button>
 
+              {/* Result */}
               {simResult && simChart && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
-                  <div className={`rounded-lg border p-3 text-center ${
-                    simResult.successProbability >= 0.75 ? "border-emerald-500/30 bg-emerald-500/8" :
-                    simResult.successProbability >= 0.5 ? "border-amber-500/30 bg-amber-500/8" :
-                    "border-rose-500/30 bg-rose-500/8"
-                  }`}>
-                    <p className="text-[10px] text-slate-400 uppercase tracking-wider">Success Probability</p>
-                    <p className={`text-3xl font-black mt-1 ${
-                      simResult.successProbability >= 0.75 ? "text-emerald-400" :
-                      simResult.successProbability >= 0.5 ? "text-amber-400" : "text-rose-400"
-                    }`}>
+                  <div className={`rounded-xl border p-3 text-center ${
+                    simResult.successProbability >= 0.75 ? "border-emerald-500/25 bg-emerald-500/8"
+                      : simResult.successProbability >= 0.5 ? "border-amber-500/25 bg-amber-500/8"
+                      : "border-rose-500/25 bg-rose-500/8"}`}>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wider">Probability of Reaching Goal</p>
+                    <p className={`text-4xl font-black mt-0.5 ${simResult.successProbability >= 0.75 ? "text-emerald-400" : simResult.successProbability >= 0.5 ? "text-amber-400" : "text-rose-400"}`}>
                       {(simResult.successProbability * 100).toFixed(0)}%
                     </p>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Median ending: {fmtCompact(simResult.medianEnding)}
-                    </p>
+                    <p className="text-xs text-slate-400">Median: {fmtCompact(simResult.medianEnding)}</p>
                   </div>
                   <svg viewBox={`0 0 ${simChart.w} ${simChart.h}`} className="w-full">
-                    <line x1={simChart.pad} y1={simChart.goalY} x2={simChart.w - simChart.pad} y2={simChart.goalY}
-                      stroke="#f59e0b" strokeDasharray="3 3" strokeWidth={1} />
+                    <line x1={8} y1={simChart.goalY} x2={simChart.w - 8} y2={simChart.goalY} stroke="#f59e0b" strokeDasharray="3 3" strokeWidth={1} />
                     <path d={simChart.p10} fill="none" stroke="#f43f5e" strokeWidth={1.5} opacity={0.6} strokeDasharray="3 3" />
                     <path d={simChart.p90} fill="none" stroke="#06b6d4" strokeWidth={1.5} opacity={0.6} strokeDasharray="3 3" />
                     <path d={simChart.p50} fill="none" stroke="#10b981" strokeWidth={2.5} />
                   </svg>
                   <div className="flex justify-center gap-4 text-[10px] text-slate-500">
-                    <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-rose-400 inline-block" />Worst</span>
-                    <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-emerald-400 inline-block" />Median</span>
-                    <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-cyan-400 inline-block" />Best</span>
+                    <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-rose-400 inline-block rounded" />P10</span>
+                    <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-emerald-400 inline-block rounded" />Median</span>
+                    <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-cyan-400 inline-block rounded" />P90</span>
                   </div>
                 </motion.div>
               )}
             </div>
           </div>
 
-          {/* Market Pulse */}
-          <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-            <h2 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
-              <Activity className="w-4 h-4 text-amber-400" />
-              Market Sentiment
+          {/* Sector allocation */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5">
+            <h2 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+              <Target className="w-4 h-4 text-purple-400" /> Sector Allocation
             </h2>
-            <PulseGauge value={pulse} />
-            <p className="text-center text-[10px] text-slate-500 mt-2">Fear & Greed Index · Live</p>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Bottom: Spending + Asset Mix ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-        {/* Spending Breakdown */}
-        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-          <h2 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
-            <TrendingDown className="w-4 h-4 text-rose-400" />
-            Spending Breakdown
-          </h2>
-          {spendByCategory.length === 0 ? (
-            <div className="py-8 text-center text-sm text-slate-500">No transactions yet</div>
-          ) : (
-            <div className="flex items-center gap-6">
-              <div className="flex-shrink-0 w-36">
-                <DonutChart segments={donutSegments} />
-                <p className="text-center text-xs text-slate-500 mt-1 font-mono">{fmtCompact(totalExpenses)}</p>
-              </div>
-              <div className="flex-1 space-y-2">
-                {spendByCategory.map(([cat, amt], i) => (
-                  <div key={cat} className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: categoryColors[i] }} />
-                    <span className="text-xs text-slate-400 flex-1 truncate">{cat}</span>
-                    <span className="text-xs font-mono font-semibold text-slate-200">{fmtCompact(amt)}</span>
-                    <span className="text-[10px] text-slate-500 w-10 text-right">
-                      {totalExpenses > 0 ? ((amt / totalExpenses) * 100).toFixed(0) : 0}%
+            <div className="space-y-2.5">
+              {sectors.slice(0, 6).map(s => {
+                const rColor = s.risk < 35 ? "#10b981" : s.risk < 60 ? "#f59e0b" : "#f43f5e";
+                return (
+                  <div key={s.name} className="flex items-center gap-3">
+                    <span className="text-xs text-slate-400 w-20 truncate">{s.name}</span>
+                    <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                      <motion.div initial={{ width: 0 }} animate={{ width: `${s.weight}%` }}
+                        transition={{ duration: 0.9, ease: "easeOut" }}
+                        className="h-full rounded-full" style={{ background: rColor }} />
+                    </div>
+                    <span className="text-[10px] font-mono text-slate-400 w-7 text-right">{s.weight}%</span>
+                    <span className={`text-[10px] font-mono w-11 text-right ${s.change >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                      {s.change >= 0 ? "+" : ""}{s.change.toFixed(1)}%
                     </span>
                   </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
-          )}
-        </div>
-
-        {/* Asset Allocation */}
-        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-          <h2 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
-            <Target className="w-4 h-4 text-blue-400" />
-            Sector Allocation
-          </h2>
-          <div className="space-y-2">
-            {sectors.slice(0, 6).map(s => {
-              const riskColor = s.risk < 35 ? "#10b981" : s.risk < 60 ? "#f59e0b" : "#f43f5e";
-              return (
-                <div key={s.name} className="flex items-center gap-3">
-                  <span className="text-xs text-slate-400 w-20 truncate">{s.name}</span>
-                  <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${s.weight}%` }}
-                      transition={{ duration: 0.8, ease: "easeOut" }}
-                      className="h-full rounded-full"
-                      style={{ background: riskColor }}
-                    />
-                  </div>
-                  <span className="text-[10px] font-mono text-slate-400 w-8 text-right">{s.weight}%</span>
-                  <span className={`text-[10px] font-mono w-12 text-right ${s.change >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                    {s.change >= 0 ? "+" : ""}{s.change.toFixed(1)}%
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-          <div className="mt-3 pt-3 border-t border-slate-800 flex items-center gap-4 text-[10px] text-slate-500">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />Low risk</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />Medium</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />High</span>
           </div>
         </div>
       </div>
     </div>
   );
 }
+

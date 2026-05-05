@@ -1,162 +1,179 @@
 "use client";
 
 import Link from "next/link";
-import { motion } from "framer-motion";
-import { ArrowRight, Brain, TrendingUp, Shield, Zap, BarChart3, BookOpen } from "lucide-react";
-import { useUser } from "@/lib/user";
-import { useFinance } from "@/lib/finance";
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  BookOpen, TrendingUp, PiggyBank, Shield, ArrowRight,
+  Search, Clock, CheckCircle2, BarChart3,
+} from "lucide-react";
+import { articles } from "@/lib/articles";
 
-const features = [
-  {
-    icon: Brain,
-    title: "AI Insights",
-    desc: "Real-time analysis of your spending patterns, savings rate, and portfolio risk — with specific, actionable recommendations.",
-    color: "text-emerald-400",
-    border: "border-emerald-500/20",
-    bg: "bg-emerald-500/5",
-  },
-  {
-    icon: TrendingUp,
-    title: "Wealth Forecast",
-    desc: "Monte Carlo simulation runs 5,000+ retirement scenarios using your actual numbers to show probability of reaching your goals.",
-    color: "text-blue-400",
-    border: "border-blue-500/20",
-    bg: "bg-blue-500/5",
-  },
-  {
-    icon: BarChart3,
-    title: "Portfolio Tracker",
-    desc: "Track positions, unrealized P&L, sector exposure, and tax-loss harvesting opportunities in one clean view.",
-    color: "text-purple-400",
-    border: "border-purple-500/20",
-    bg: "bg-purple-500/5",
-  },
-  {
-    icon: BookOpen,
-    title: "Financial Education",
-    desc: "Evidence-based articles on index funds, compound interest, asset allocation, and tax strategy — with interactive quizzes.",
-    color: "text-amber-400",
-    border: "border-amber-500/20",
-    bg: "bg-amber-500/5",
-  },
+const categoryMeta: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
+  Budgeting:  { icon: PiggyBank,  color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/20" },
+  Investing:  { icon: TrendingUp, color: "text-blue-400",    bg: "bg-blue-500/10 border-blue-500/20" },
+  Wealth:     { icon: BarChart3,  color: "text-purple-400",  bg: "bg-purple-500/10 border-purple-500/20" },
+  Strategy:   { icon: Shield,     color: "text-amber-400",   bg: "bg-amber-500/10 border-amber-500/20" },
+};
+
+const CATEGORIES = ["All", "Budgeting", "Investing", "Wealth", "Strategy"];
+
+const highlights = [
+  { label: "Start here", slug: "50-30-20-framework",   desc: "The simplest budget framework that actually works." },
+  { label: "Core concept", slug: "compound-interest",   desc: "Why time beats money every single time." },
+  { label: "Key strategy", slug: "index-funds-vs-stocks", desc: "Data proves index funds beat 90% of active managers." },
 ];
 
-export default function HomePage() {
-  const { firstName, hasProfile } = useUser();
-  const { netWorth, isLoaded } = useFinance();
+export default function LearnPage() {
+  const [category, setCategory] = useState("All");
+  const [query, setQuery]       = useState("");
+
+  const filtered = articles.filter(a => {
+    const matchCat = category === "All" || a.category === category;
+    const matchQ   = query === "" ||
+      a.title.toLowerCase().includes(query.toLowerCase()) ||
+      a.description.toLowerCase().includes(query.toLowerCase());
+    return matchCat && matchQ;
+  });
 
   return (
-    <div className="min-h-screen">
-      {/* Hero */}
-      <section className="pt-8 pb-16 lg:pt-16 lg:pb-24">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="max-w-3xl"
-        >
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/8 text-emerald-400 text-xs font-semibold mb-6">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            AI-Powered Financial Intelligence
+    <div className="space-y-10 pb-20">
+
+      {/* ── Header ── */}
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
+        <div className="flex items-center justify-between mb-2">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-blue-500/20 bg-blue-500/8 text-blue-400 text-xs font-semibold">
+            <BookOpen className="w-3 h-3" /> Financial Education
           </div>
+          <Link href="/dashboard">
+            <button className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-emerald-400 transition-colors font-semibold">
+              Open Dashboard <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </Link>
+        </div>
+        <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight mb-3">
+          Learn to build wealth.
+        </h1>
+        <p className="text-slate-400 text-base max-w-xl leading-relaxed">
+          Evidence-based guides on budgeting, investing, and tax strategy. No fluff — just the principles that actually compound wealth.
+        </p>
+      </motion.div>
 
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-white leading-tight tracking-tight mb-6">
-            {hasProfile && firstName ? (
-              <>Welcome back,<br /><span className="text-emerald-400">{firstName}</span>.</>
-            ) : (
-              <>Your wealth,<br /><span className="text-emerald-400">understood.</span></>
-            )}
-          </h1>
-
-          <p className="text-lg text-slate-400 leading-relaxed mb-8 max-w-xl">
-            FinSight analyzes your income, spending, and investments to give you precise, personalized AI recommendations — not generic advice.
-          </p>
-
-          <div className="flex items-center gap-3 flex-wrap">
-            <Link href="/dashboard">
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className="flex items-center gap-2 px-6 py-3 rounded-xl bg-emerald-500 text-slate-950 font-bold text-sm shadow-[0_0_30px_-5px_rgba(16,185,129,0.5)] hover:bg-emerald-400 transition-colors"
-              >
-                {hasProfile ? "Open Dashboard" : "Get Started"}
-                <ArrowRight className="w-4 h-4" />
-              </motion.button>
-            </Link>
-            <Link href="/learn">
-              <button className="flex items-center gap-2 px-6 py-3 rounded-xl border border-slate-700 text-slate-300 font-semibold text-sm hover:border-slate-600 hover:text-white transition-colors">
-                <BookOpen className="w-4 h-4" />
-                Learn
-              </button>
-            </Link>
-          </div>
-
-          {/* Live net worth teaser */}
-          {isLoaded && netWorth > 0 && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.5 }}
-              className="mt-6 inline-flex items-center gap-3 px-4 py-2.5 rounded-xl border border-slate-800 bg-slate-900/60"
-            >
-              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-sm text-slate-400">Net worth tracked:</span>
-              <span className="text-sm font-bold text-white font-mono">
-                ${netWorth.toLocaleString()}
-              </span>
-            </motion.div>
-          )}
-        </motion.div>
-      </section>
-
-      {/* Feature grid */}
-      <section className="py-8">
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.2 }}
-          className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-6"
-        >
-          What FinSight does
-        </motion.p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {features.map((f, i) => {
-            const Icon = f.icon;
+      {/* ── Quick Start Highlights ── */}
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">Recommended reading</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {highlights.map((h, i) => {
+            const article = articles.find(a => a.slug === h.slug);
+            if (!article) return null;
             return (
-              <motion.div
-                key={f.title}
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.15 + i * 0.08 }}
-                className={`rounded-xl border ${f.border} ${f.bg} p-5`}
-              >
-                <Icon className={`w-5 h-5 ${f.color} mb-3`} />
-                <h3 className="text-sm font-bold text-white mb-1.5">{f.title}</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">{f.desc}</p>
-              </motion.div>
+              <Link key={h.slug} href={`/learn/${h.slug}`}>
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 + i * 0.06 }}
+                  whileHover={{ y: -2 }}
+                  className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 cursor-pointer hover:border-slate-700 transition-all group">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">{h.label}</span>
+                  <h3 className="text-sm font-bold text-white mt-1 mb-1 group-hover:text-emerald-300 transition-colors">{article.title}</h3>
+                  <p className="text-xs text-slate-500 leading-relaxed">{h.desc}</p>
+                  <div className="flex items-center gap-1 mt-3 text-[10px] text-slate-500">
+                    <Clock className="w-3 h-3" />{article.time}
+                  </div>
+                </motion.div>
+              </Link>
             );
           })}
         </div>
-      </section>
+      </motion.div>
 
-      {/* CTA strip */}
-      <motion.section
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.6 }}
-        className="mt-8 rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/8 to-blue-500/5 p-8 text-center"
-      >
-        <Zap className="w-8 h-8 text-emerald-400 mx-auto mb-3" />
-        <h2 className="text-xl font-bold text-white mb-2">Ready to take control?</h2>
-        <p className="text-sm text-slate-400 mb-5 max-w-md mx-auto">
-          Add your first transaction and watch AI insights activate instantly — no account required.
-        </p>
+      {/* ── Search + Filter ── */}
+      <div className="space-y-3">
+        <div className="relative">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+          <input
+            type="text" placeholder="Search articles…" value={query}
+            onChange={e => setQuery(e.target.value)}
+            className="w-full pl-11 pr-4 py-2.5 rounded-xl bg-slate-900/60 border border-slate-800 text-white text-sm placeholder-slate-500 outline-none focus:border-slate-700 transition-colors"
+          />
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          {CATEGORIES.map(cat => (
+            <button key={cat} onClick={() => setCategory(cat)}
+              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${
+                category === cat
+                  ? "bg-white text-slate-950 border-white"
+                  : "border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200"
+              }`}>
+              {cat}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-slate-600">{filtered.length} article{filtered.length !== 1 ? "s" : ""}</p>
+      </div>
+
+      {/* ── Article grid ── */}
+      <AnimatePresence mode="popLayout">
+        {filtered.length === 0 ? (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-16">
+            <BookOpen className="w-10 h-10 text-slate-700 mx-auto mb-3" />
+            <p className="text-slate-500 text-sm">No articles match your search.</p>
+          </motion.div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {filtered.map((article, i) => {
+              const meta = categoryMeta[article.category] || categoryMeta.Strategy;
+              const Icon = meta.icon;
+              return (
+                <motion.div key={article.slug} layout
+                  initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.98 }} transition={{ delay: i * 0.05 }}>
+                  <Link href={`/learn/${article.slug}`}>
+                    <motion.div whileHover={{ y: -3, boxShadow: "0 12px 40px rgba(0,0,0,0.3)" }}
+                      className="h-full rounded-2xl border border-slate-800 bg-slate-900/50 p-5 cursor-pointer group transition-colors hover:border-slate-700">
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className={`p-2 rounded-lg border ${meta.bg}`}>
+                          <Icon className={`w-4 h-4 ${meta.color}`} />
+                        </div>
+                        <span className={`text-[10px] font-bold uppercase tracking-wider ${meta.color}`}>{article.category}</span>
+                        <span className="ml-auto flex items-center gap-1 text-[10px] text-slate-500">
+                          <Clock className="w-3 h-3" />{article.time}
+                        </span>
+                      </div>
+
+                      <h2 className="text-base font-bold text-white mb-2 group-hover:text-emerald-300 transition-colors leading-snug">
+                        {article.title}
+                      </h2>
+                      <p className="text-xs text-slate-400 leading-relaxed mb-4">{article.description}</p>
+
+                      <div className="flex items-center gap-1 text-xs font-semibold text-slate-500 group-hover:text-emerald-400 transition-colors">
+                        Read article <ArrowRight className="w-3.5 h-3.5" />
+                      </div>
+                    </motion.div>
+                  </Link>
+                </motion.div>
+              );
+            })}
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Apply knowledge CTA ── */}
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}
+        className="rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/8 to-blue-500/5 p-6 flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <p className="text-sm font-bold text-white">Ready to put this into practice?</p>
+          </div>
+          <p className="text-xs text-slate-400">Your dashboard applies these principles to your actual numbers in real time.</p>
+        </div>
         <Link href="/dashboard">
-          <button className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-emerald-500 text-slate-950 font-bold text-sm hover:bg-emerald-400 transition-colors">
+          <button className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500 text-slate-950 font-bold text-sm hover:bg-emerald-400 transition-colors whitespace-nowrap">
             Open Dashboard <ArrowRight className="w-4 h-4" />
           </button>
         </Link>
-      </motion.section>
+      </motion.div>
     </div>
   );
 }
+
