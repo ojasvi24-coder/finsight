@@ -4,7 +4,6 @@ import React, { Suspense, useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import ProfileModal from "@/components/ProfileModal";
 import CommandPalette from "@/components/CommandPalette";
-import LiveTelemetry from "@/components/LiveTelemetry";
 import { Menu, Command } from "lucide-react";
 
 export default function ClientLayout({
@@ -56,7 +55,7 @@ export default function ClientLayout({
           </div>
 
           {/* Floating Cmd-K hint */}
-          <div className="pointer-events-none fixed bottom-12 right-4 z-40 hidden lg:block">
+          <div className="pointer-events-none fixed bottom-6 right-4 z-40 hidden lg:block">
             <div className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/80 px-3 py-1.5 text-[11px] text-slate-500 backdrop-blur-md">
               <Command className="h-3 w-3" />
               <span className="font-mono">K</span>
@@ -71,9 +70,6 @@ export default function ClientLayout({
         <ProfileModal />
       </Suspense>
       <CommandPalette />
-
-      {/* Clickable telemetry ticker — mounted globally, fixed to bottom */}
-      <LiveTelemetry />
     </>
   );
 }
